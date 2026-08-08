@@ -140,7 +140,7 @@ function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onUpdate,
   useEffect(() => { setRevealed(!isTestMode) }, [isTestMode])
   useEffect(() => { if (expanded === 'none') setTempFontSize(card.fontSize || 16) }, [expanded, card.fontSize])
 
-  const style = { transform: expanded !== 'none' ? 'none' : CSS.Transform.toString(transform), transition: expanded !== 'none' ? 'none' : transition, border: isOver ? '3px dashed #3182ce' : '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', backgroundColor: '#ffffff', boxShadow: isOver ? '0 4px 12px rgba(49, 130, 206, 0.3)' : '0 2px 4px rgba(0,0,0,0.05)', position: 'relative' as const, zIndex: expanded !== 'none' ? 9999 : 1, color: '#2d3748' }
+  const style = { transform: expanded !== 'none' ? 'none' : CSS.Transform.toString(transform), transition: expanded !== 'none' ? 'none' : transition, border: isOver ? '3px dashed #3182ce' : '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', backgroundColor: '#ffffff', boxShadow: isOver ? '0 4px 12px rgba(49, 130, 206, 0.3)' : '0 2px 4px rgba(0,0,0,0.05)', position: 'relative' as const, zIndex: expanded !== 'none' ? 9999 : 1, color: '#2d3748', ...((isMobileView && !isEditMode) ? { flex: '0 0 100%', scrollSnapAlign: 'center', boxSizing: 'border-box' as const, minWidth: '0' } : {}) }
   const togglePin = (imgId: string, isQ: boolean) => {
     const newCard = { ...card };
     if (isQ) newCard.qImages = newCard.qImages.map(img => img.id === imgId ? { ...img, pinned: !img.pinned } : img);
@@ -176,10 +176,10 @@ function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onUpdate,
           <button onClick={() => onDelete(card.id)} style={{ color: '#e53e3e', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold' }}>削除</button>
         </div>
       )}
-      {/* ★ スマホ時はflexにして横スクロール（スワイプ）できるようにする */}
-      <div style={{ display: isMobileView ? 'flex' : 'grid', gridTemplateColumns: isMobileView ? undefined : '390px 390px', gap: '20px', justifyContent: isMobileView ? 'flex-start' : 'center', overflowX: isMobileView ? 'auto' : 'visible', scrollSnapType: isMobileView ? 'x mandatory' : 'none', width: '100%', paddingBottom: isMobileView ? '10px' : '0' }}>
-        {/* Qのコンテナ（横幅100%を確保してピタッと止まるようにする） */}
-        <div style={{ ...(expanded === 'q' ? expandedStyle(false) : { flex: isMobileView ? '0 0 100%' : 'auto', scrollSnapAlign: 'start', minWidth: '0' }) }}>
+      {/* ★ カード内はスマホ時も縦にQとAを並べる (1frで全幅) */}
+      <div style={{ display: 'grid', gridTemplateColumns: isMobileView ? '1fr' : '390px 390px', gap: '20px', justifyContent: 'center', width: '100%' }}>
+        {/* Qのコンテナ */}
+        <div style={{ ...(expanded === 'q' ? expandedStyle(false) : {}) }}>
           <strong style={{ color: '#2b6cb0', display: 'flex', justifyContent: 'space-between', marginBottom: '8px', alignItems: 'center' }}>
             <span style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>Q{index}: 問題{!isTestMode && <button onClick={() => onEdit(card)} style={{ ...miniBtnStyle, backgroundColor: '#bee3f8', color: '#2b6cb0' }}>編集する</button>}</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -193,7 +193,7 @@ function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onUpdate,
           </div>
         </div>
         {/* Aのコンテナ */}
-        <div style={{ ...(expanded === 'a' ? expandedStyle(true) : { flex: isMobileView ? '0 0 100%' : 'auto', scrollSnapAlign: 'start', minWidth: '0' }) }} onClick={() => { if (isTestMode) setRevealed(!revealed) }}>
+        <div style={{ ...(expanded === 'a' ? expandedStyle(true) : {}) }} onClick={() => { if (isTestMode) setRevealed(!revealed) }}>
           <strong style={{ color: '#c53030', display: 'flex', justifyContent: 'space-between', marginBottom: '8px', alignItems: 'center' }}>
             <span>A{index}: 解答 {isTestMode && <span style={{fontSize: '0.8rem', color: '#e53e3e', marginLeft: '10px'}}>(クリックで表示)</span>}</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -601,7 +601,8 @@ export default function App() {
 
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => { const { active, over } = e; if (over && active.id !== over.id && activeFile) { const updatedCards = arrayMove(activeFile.cards, activeFile.cards.findIndex(c => c.id === active.id), activeFile.cards.findIndex(c => c.id === over.id)); setItems(items.map(i => i.id === activeFile.id ? { ...i, cards: updatedCards } : i)) } }}>
                 <SortableContext items={activeFile?.cards.map(c => c.id) || []} strategy={verticalListSortingStrategy}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  {/* ★ スマホで閲覧・テスト中は横スクロール（スワイプ）にする */}
+                  <div style={{ display: 'flex', flexDirection: (isMobileView && !isEditMode) ? 'row' : 'column', gap: '20px', overflowX: (isMobileView && !isEditMode) ? 'auto' : 'visible', scrollSnapType: (isMobileView && !isEditMode) ? 'x mandatory' : 'none', paddingBottom: '10px' }}>
                     {activeFile?.cards.map((card, index) => <SortableCard key={card.id} card={card} index={index + 1} isTestMode={isTestMode} isEditMode={isEditMode} fontSize={fontSize} isMobileView={isMobileView} onDelete={(id) => setItems(items.map(i => i.id === activeFileId ? { ...i, cards: i.cards.filter(c => c.id !== id) } : i))} onUpdate={(updatedCard) => setItems(items.map(i => i.id === activeFileId ? { ...i, cards: i.cards.map(c => c.id === updatedCard.id ? updatedCard : c) } : i))} onEdit={(c)=>{ setEditingCardId(c.id); setFontSize(c.fontSize || 16); if (questionRef.current) questionRef.current.innerHTML = c.question; if (answerRef.current) answerRef.current.innerHTML = c.answer; setQImages([...c.qImages]); setAImages([...c.aImages]); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />)}
                   </div>
                 </SortableContext>
