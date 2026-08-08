@@ -164,7 +164,7 @@ function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onUpdate,
     )
   }
 
-  const baseBoxStyle = { fontFamily: 'sans-serif', position: 'relative' as const, height: '250px', width: '390px', minWidth: '390px', maxWidth: '390px', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '10px', fontSize: `${card.fontSize || 16}px`, lineHeight: '1.6', backgroundColor: '#fff', overflowX: 'auto' as const, overflowY: 'auto' as const, textAlign: 'left' as const, whiteSpace: 'pre' as const, boxSizing: 'border-box' as const, color: '#2d3748', display: 'flex', flexDirection: 'column' }
+  const baseBoxStyle = { fontFamily: 'sans-serif', position: 'relative' as const, height: '250px', width: '100%', minWidth: '0', maxWidth: '100%', border: '1px solid #e2e8f0', /* ...以下略 */ }
   const expandedStyle = (isRight: boolean) => ({ position: 'fixed' as const, top: 0, left: (isRight && !isMobileView) ? '50vw' : 0, width: isMobileView ? '100vw' : '50vw', height: '100vh', zIndex: 10000, padding: '40px', boxShadow: isRight ? '-4px 0 15px rgba(0,0,0,0.2)' : '4px 0 15px rgba(0,0,0,0.2)', backgroundColor: '#fff', display: 'flex', flexDirection: 'column' as const, boxSizing: 'border-box' as const, color: '#2d3748' })
   const innerContentStyle = (isExpanded: boolean) => ({ ...(isExpanded ? { flex: 1, height: '100%', width: '100%', border: '1px solid #e2e8f0', padding: '10px', overflowX: 'auto' as const, overflowY: 'auto' as const, position: 'relative' as const, textAlign: 'left' as const, whiteSpace: 'pre' as const, boxSizing: 'border-box' as const, fontSize: `${tempFontSize}px`, color: '#2d3748', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column' } : baseBoxStyle) } as React.CSSProperties)
 
@@ -176,8 +176,10 @@ function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onUpdate,
           <button onClick={() => onDelete(card.id)} style={{ color: '#e53e3e', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold' }}>削除</button>
         </div>
       )}
-      <div style={{ display: 'grid', gridTemplateColumns: isMobileView ? 'minmax(0, 390px)' : '390px 390px', gap: '20px', justifyContent: 'center' }}>
-        <div style={{ ...(expanded === 'q' ? expandedStyle(false) : {}) }}>
+      {/* ★ スマホ時はflexにして横スクロール（スワイプ）できるようにする */}
+      <div style={{ display: isMobileView ? 'flex' : 'grid', gridTemplateColumns: isMobileView ? undefined : '390px 390px', gap: '20px', justifyContent: isMobileView ? 'flex-start' : 'center', overflowX: isMobileView ? 'auto' : 'visible', scrollSnapType: isMobileView ? 'x mandatory' : 'none', width: '100%', paddingBottom: isMobileView ? '10px' : '0' }}>
+        {/* Qのコンテナ（横幅100%を確保してピタッと止まるようにする） */}
+        <div style={{ ...(expanded === 'q' ? expandedStyle(false) : { flex: isMobileView ? '0 0 100%' : 'auto', scrollSnapAlign: 'start', minWidth: '0' }) }}>
           <strong style={{ color: '#2b6cb0', display: 'flex', justifyContent: 'space-between', marginBottom: '8px', alignItems: 'center' }}>
             <span style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>Q{index}: 問題{!isTestMode && <button onClick={() => onEdit(card)} style={{ ...miniBtnStyle, backgroundColor: '#bee3f8', color: '#2b6cb0' }}>編集する</button>}</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -190,7 +192,8 @@ function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onUpdate,
             <div dangerouslySetInnerHTML={{ __html: renderLatex(card.question) }} className="rich-text-content" style={{ flex: 1 }} />
           </div>
         </div>
-        <div style={{ ...(expanded === 'a' ? expandedStyle(true) : {}) }} onClick={() => { if (isTestMode) setRevealed(!revealed) }}>
+        {/* Aのコンテナ */}
+        <div style={{ ...(expanded === 'a' ? expandedStyle(true) : { flex: isMobileView ? '0 0 100%' : 'auto', scrollSnapAlign: 'start', minWidth: '0' }) }} onClick={() => { if (isTestMode) setRevealed(!revealed) }}>
           <strong style={{ color: '#c53030', display: 'flex', justifyContent: 'space-between', marginBottom: '8px', alignItems: 'center' }}>
             <span>A{index}: 解答 {isTestMode && <span style={{fontSize: '0.8rem', color: '#e53e3e', marginLeft: '10px'}}>(クリックで表示)</span>}</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -544,7 +547,7 @@ export default function App() {
               
               {!isTestMode && (
                 <div onPaste={handleStockPaste} onDrop={handleStockFileDrop} onDragOver={(e) => e.preventDefault()} tabIndex={0} style={{ width: '100%', boxSizing: 'border-box', backgroundColor: '#e2e8f0', color: '#2d3748', border: '2px dashed #a0aec0', borderRadius: '8px', padding: '15px', marginBottom: '20px', outline: 'none' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}><strong style={{ fontSize: '0.9rem' }}>スクショ箱 (ペースト・ドロップ)</strong><button onClick={(e) => { if(e.shiftKey) setStockImages([]); else alert('Shift+クリックで全削除') }} style={{ ...miniBtnStyle, color: '#e53e3e' }}>一括削除</button></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}><strong style={{ fontSize: '0.9rem' }}>スクショ箱 (ペースト・ドロップ)</strong><button onClick={() => { if(window.confirm('スクショ箱の画像をすべて削除しますか？')) setStockImages([]) }} style={{ ...miniBtnStyle, color: '#e53e3e' }}>一括削除</button></div>
                   <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', minHeight: '80px', paddingBottom: '10px' }}>
                     {stockImages.map(img => (
                       <div key={img.id} style={{ position: 'relative', width: '150px', flexShrink: 0, backgroundColor: '#fff', padding: '4px', borderRadius: '4px', boxShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>
@@ -563,7 +566,7 @@ export default function App() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem' }}><label>文字サイズ:</label><input type="range" min="5" max="32" value={fontSize} onChange={(e) => setFontSize(Number(e.target.value))} /><span>{fontSize}px</span></div>
                   </div>
                   <RichToolbar hasSelection={hasSelection} />
-                  <div style={{ display: 'grid', gridTemplateColumns: isMobileView ? '390px' : '390px 390px', gap: '20px', marginBottom: '15px', justifyContent: 'center' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: isMobileView ? '1fr' : '390px 390px', gap: '20px', marginBottom: '15px', justifyContent: 'center', width: '100%' }}>
                     <div style={{ ...(createExpanded === 'q' ? expandedQStyle : {}) } as React.CSSProperties}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', alignItems: 'center' }}>
                         <strong style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>問題{createExpanded === 'q' && <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.8rem', marginLeft: '10px' }}>文字: <input type="range" min="5" max="32" value={tempCreateFontSize} onChange={(e) => setTempCreateFontSize(Number(e.target.value))} /> {tempCreateFontSize}px</div>}<button onClick={() => setCreateExpanded(createExpanded === 'q' ? 'none' : 'q')} style={expandBtnStyleBig}>{createExpanded === 'q' ? '縮小 ⤡' : '拡大 ⤢'}</button></strong>
@@ -614,7 +617,7 @@ export default function App() {
 const btnStyle = { padding: '8px 16px', borderRadius: '6px', border: '1px solid #cbd5e0', backgroundColor: '#ffffff', cursor: 'pointer', fontWeight: 'bold' as const, color: '#2d3748' }
 const miniBtnStyle = { padding: '4px 8px', fontSize: '0.8rem', borderRadius: '4px', border: '1px solid #ccc', cursor: 'pointer', backgroundColor: '#f7fafc', fontWeight: 'bold' as const, color: '#2d3748' }
 const expandBtnStyleBig = { padding: '8px 16px', fontSize: '1rem', borderRadius: '6px', border: '2px solid #a0aec0', cursor: 'pointer', backgroundColor: '#edf2f7', fontWeight: 'bold' as const, color: '#2d3748' }
-const baseInputStyle = { fontFamily: 'sans-serif', position: 'relative' as const, height: '250px', width: '100%', minWidth: '0', maxWidth: '390px', border: '1px solid #cbd5e0', borderRadius: '6px', padding: '10px', backgroundColor: '#fff', outline: 'none', overflowX: 'auto' as const, overflowY: 'auto' as const, whiteSpace: 'pre' as const, boxSizing: 'border-box' as const, textAlign: 'left' as const, color: '#2d3748', display: 'flex', flexDirection: 'column' }
+const baseInputStyle = { fontFamily: 'sans-serif', position: 'relative' as const, height: '250px', width: '100%', minWidth: '0', maxWidth: '100%', border: '1px solid #cbd5e0', /* ...以下略 */ }
 const expandedQStyle = { position: 'fixed', top: 0, left: 0, width: '50vw', height: '100vh', zIndex: 10000, padding: '40px', boxShadow: '4px 0 15px rgba(0,0,0,0.2)', backgroundColor: '#fff', display: 'flex', flexDirection: 'column' as const, boxSizing: 'border-box' as const, color: '#2d3748' }
 const expandedAStyle = { position: 'fixed', top: 0, right: 0, width: '50vw', height: '100vh', zIndex: 10000, padding: '40px', boxShadow: '-4px 0 15px rgba(0,0,0,0.2)', backgroundColor: '#fff', display: 'flex', flexDirection: 'column' as const, boxSizing: 'border-box' as const, color: '#2d3748' }
 const innerInputStyle = (isExpanded: boolean) => ({ ...(isExpanded ? { flex: 1, height: '100%', width: '100%', border: '1px solid #e2e8f0', padding: '10px', overflowX: 'auto' as const, overflowY: 'auto' as const, position: 'relative' as const, whiteSpace: 'pre' as const, boxSizing: 'border-box' as const, textAlign: 'left' as const, color: '#2d3748', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column' } : baseInputStyle) } as React.CSSProperties)
