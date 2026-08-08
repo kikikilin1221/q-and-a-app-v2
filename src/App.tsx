@@ -176,7 +176,7 @@ function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onUpdate,
           <button onClick={() => onDelete(card.id)} style={{ color: '#e53e3e', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold' }}>削除</button>
         </div>
       )}
-      <div style={{ display: 'grid', gridTemplateColumns: isMobileView ? '390px' : '390px 390px', gap: '20px', justifyContent: 'center' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobileView ? 'minmax(0, 390px)' : '390px 390px', gap: '20px', justifyContent: 'center' }}>
         <div style={{ ...(expanded === 'q' ? expandedStyle(false) : {}) }}>
           <strong style={{ color: '#2b6cb0', display: 'flex', justifyContent: 'space-between', marginBottom: '8px', alignItems: 'center' }}>
             <span style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>Q{index}: 問題{!isTestMode && <button onClick={() => onEdit(card)} style={{ ...miniBtnStyle, backgroundColor: '#bee3f8', color: '#2b6cb0' }}>編集する</button>}</span>
@@ -238,7 +238,14 @@ export default function App() {
   const [dragOverRoomId, setDragOverRoomId] = useState<string | null>(null)
   
   const [editingCardId, setEditingCardId] = useState<string | null>(null)
-  const [isMobileView, setIsMobileView] = useState(false)
+  const [isMobileView, setIsMobileView] = useState(window.innerWidth <= 768);
+  const [isRoomDeleteMode, setIsRoomDeleteMode] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobileView(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   const [isTestMode, setIsTestMode] = useState(false)
   const [isEditMode, setIsEditMode] = useState(false)
   const [fontSize, setFontSize] = useState(16)
@@ -434,10 +441,6 @@ export default function App() {
               <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e0', boxSizing: 'border-box', color: '#2d3748' }} />
             </div>
             {authMessage && <div style={{ padding: '10px', backgroundColor: '#ebf8ff', color: '#2b6cb0', borderRadius: '6px', fontSize: '0.9rem', whiteSpace: 'pre-wrap' }}>{authMessage}</div>}
-            <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-              <button type="button" onClick={() => setAuthMode('login')} style={{ flex: 1, padding: '12px', borderRadius: '6px', border: authMode === 'login' ? '2px solid #3182ce' : '1px solid #cbd5e0', backgroundColor: authMode === 'login' ? '#ebf8ff' : '#fff', color: '#2d3748', fontWeight: 'bold', cursor: 'pointer' }}>ログイン</button>
-              <button type="button" onClick={() => setAuthMode('signup')} style={{ flex: 1, padding: '12px', borderRadius: '6px', border: authMode === 'signup' ? '2px solid #3182ce' : '1px solid #cbd5e0', backgroundColor: authMode === 'signup' ? '#ebf8ff' : '#fff', color: '#2d3748', fontWeight: 'bold', cursor: 'pointer' }}>新規登録</button>
-            </div>
             <button type="submit" style={{ marginTop: '10px', padding: '12px', borderRadius: '6px', border: 'none', backgroundColor: '#3182ce', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>
               {authMode === 'login' ? 'ログインする' : '登録する'}
             </button>
@@ -464,9 +467,12 @@ export default function App() {
           
           {!isDataLoaded && <div style={{ padding: '10px', backgroundColor: '#e2e8f0', color: '#2d3748', borderRadius: '4px', marginBottom: '15px' }}>⏳ クラウドからデータを読み込み中...</div>}
 
-          <div style={{ margin: '20px 0', display: 'flex', gap: '10px' }}>
+          <div style={{ margin: '20px 0', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             <button onClick={() => setItems([...items, { id: `file-${Date.now()}`, type: 'file', name: '新規一問一答ファイル', parentId: null, cards: [] }])} style={{ ...btnStyle, backgroundColor: '#3182ce', color: 'white' }}>＋ 新規ファイル</button>
             <button onClick={() => setItems([...items, { id: `folder-${Date.now()}`, type: 'folder', name: '新規フォルダ', parentId: null, cards: [] }])} style={{ ...btnStyle, backgroundColor: '#718096', color: 'white' }}>＋ 新規フォルダ</button>
+            <button onClick={() => setIsRoomDeleteMode(!isRoomDeleteMode)} style={{ ...btnStyle, backgroundColor: isRoomDeleteMode ? '#e53e3e' : '#cbd5e0', color: isRoomDeleteMode ? '#fff' : '#2d3748' }}>
+              {isRoomDeleteMode ? '完了' : '🗑 削除モード'}
+            </button>
           </div>
 
           <div onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('itemId'); setItems(items.map(item => item.id === id ? { ...item, parentId: null } : item)); setDragOverRoomId(null) }} onDragOver={(e) => e.preventDefault()} style={{ minHeight: '400px', backgroundColor: isDarkMode ? '#2d3748' : '#f7fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
@@ -483,6 +489,26 @@ export default function App() {
                         cursor: editingItemId === item.id ? 'text' : (item.type === 'file' ? 'pointer' : 'grab'), display: 'flex', alignItems: 'center', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', fontWeight: item.type === 'folder' ? 'bold' : 'normal', borderBottom: dragOverRoomId === item.id ? '3px solid #3182ce' : '1px solid #cbd5e0' }}>
                       <span style={{ marginRight: '8px', fontSize: '1.2rem' }}>{item.type === 'folder' ? '📁' : '📄'}</span>
                       {editingItemId === item.id ? <input autoFocus defaultValue={item.name} onBlur={(e) => { setItems(items.map(i => i.id === item.id ? { ...i, name: e.target.value } : i)); setEditingItemId(null) }} onKeyDown={(e) => { if (e.key === 'Enter') { setItems(items.map(i => i.id === item.id ? { ...i, name: e.currentTarget.value } : i)); setEditingItemId(null) } }} onClick={(e) => e.stopPropagation()} style={{ fontSize: '1rem', padding: '4px', borderRadius: '4px', border: '2px solid #3182ce', outline: 'none', color: '#2d3748' }} /> : <span onDoubleClick={(e) => { e.stopPropagation(); setEditingItemId(item.id) }} style={{ flexGrow: 1 }}>{item.name}</span>}
+                      
+                      {isRoomDeleteMode && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm(`「${item.name}」を削除しますか？\n※フォルダの場合は中身もすべて削除されます`)) {
+                              const idsToDelete = new Set([item.id]);
+                              let currentSize = 0;
+                              while (idsToDelete.size > currentSize) {
+                                currentSize = idsToDelete.size;
+                                items.forEach(i => { if (i.parentId && idsToDelete.has(i.parentId)) idsToDelete.add(i.id); });
+                              }
+                              setItems(items.filter(i => !idsToDelete.has(i.id)));
+                            }
+                          }}
+                          style={{ marginLeft: '10px', backgroundColor: '#fff', color: '#e53e3e', border: '2px solid #e53e3e', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', flexShrink: 0 }}
+                        >
+                          ✕
+                        </button>
+                      )}
                     </div>
                     {item.type === 'folder' && <div style={{ borderLeft: '2px dashed #cbd5e0', marginLeft: '12px', paddingLeft: '4px' }}>{renderTree(item.id, level + 1)}<div onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverRoomId(null); const draggedId = e.dataTransfer.getData('itemId'); if(draggedId === item.id) return; let currentParent: string | null = item.id; while(currentParent){ if(currentParent === draggedId) return; currentParent = items.find(i=>i.id === currentParent)?.parentId || null; } const draggedIndex = items.findIndex(i => i.id === draggedId); const draggedItem = items[draggedIndex]; const newItems = [...items]; newItems.splice(draggedIndex, 1); draggedItem.parentId = item.id; newItems.push(draggedItem); setItems(newItems); }} onDragOver={(e) => { e.preventDefault(); setDragOverRoomId(`empty-${item.id}`) }} onDragLeave={() => setDragOverRoomId(null)} style={{ padding: '8px', color: '#a0aec0', fontSize: '0.8rem', fontStyle: 'italic', borderBottom: dragOverRoomId === `empty-${item.id}` ? '3px solid #3182ce' : 'none' }}>↓ ここにドロップしてフォルダの中に入れる</div></div>}
                   </div>
@@ -588,7 +614,7 @@ export default function App() {
 const btnStyle = { padding: '8px 16px', borderRadius: '6px', border: '1px solid #cbd5e0', backgroundColor: '#ffffff', cursor: 'pointer', fontWeight: 'bold' as const, color: '#2d3748' }
 const miniBtnStyle = { padding: '4px 8px', fontSize: '0.8rem', borderRadius: '4px', border: '1px solid #ccc', cursor: 'pointer', backgroundColor: '#f7fafc', fontWeight: 'bold' as const, color: '#2d3748' }
 const expandBtnStyleBig = { padding: '8px 16px', fontSize: '1rem', borderRadius: '6px', border: '2px solid #a0aec0', cursor: 'pointer', backgroundColor: '#edf2f7', fontWeight: 'bold' as const, color: '#2d3748' }
-const baseInputStyle = { fontFamily: 'sans-serif', position: 'relative' as const, height: '250px', width: '390px', minWidth: '390px', maxWidth: '390px', border: '1px solid #cbd5e0', borderRadius: '6px', padding: '10px', backgroundColor: '#fff', outline: 'none', overflowX: 'auto' as const, overflowY: 'auto' as const, whiteSpace: 'pre' as const, boxSizing: 'border-box' as const, textAlign: 'left' as const, color: '#2d3748', display: 'flex', flexDirection: 'column' }
+const baseInputStyle = { fontFamily: 'sans-serif', position: 'relative' as const, height: '250px', width: '100%', minWidth: '0', maxWidth: '390px', border: '1px solid #cbd5e0', borderRadius: '6px', padding: '10px', backgroundColor: '#fff', outline: 'none', overflowX: 'auto' as const, overflowY: 'auto' as const, whiteSpace: 'pre' as const, boxSizing: 'border-box' as const, textAlign: 'left' as const, color: '#2d3748', display: 'flex', flexDirection: 'column' }
 const expandedQStyle = { position: 'fixed', top: 0, left: 0, width: '50vw', height: '100vh', zIndex: 10000, padding: '40px', boxShadow: '4px 0 15px rgba(0,0,0,0.2)', backgroundColor: '#fff', display: 'flex', flexDirection: 'column' as const, boxSizing: 'border-box' as const, color: '#2d3748' }
 const expandedAStyle = { position: 'fixed', top: 0, right: 0, width: '50vw', height: '100vh', zIndex: 10000, padding: '40px', boxShadow: '-4px 0 15px rgba(0,0,0,0.2)', backgroundColor: '#fff', display: 'flex', flexDirection: 'column' as const, boxSizing: 'border-box' as const, color: '#2d3748' }
 const innerInputStyle = (isExpanded: boolean) => ({ ...(isExpanded ? { flex: 1, height: '100%', width: '100%', border: '1px solid #e2e8f0', padding: '10px', overflowX: 'auto' as const, overflowY: 'auto' as const, position: 'relative' as const, whiteSpace: 'pre' as const, boxSizing: 'border-box' as const, textAlign: 'left' as const, color: '#2d3748', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column' } : baseInputStyle) } as React.CSSProperties)
