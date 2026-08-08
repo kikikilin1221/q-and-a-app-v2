@@ -808,10 +808,10 @@ export default function App() {
                             </div>
 
                             {/* ★ ワード枠の縦幅固定・スクロール設定 */}
-                            <div style={{ minHeight: '60px', maxHeight: '220px', overflowY: 'auto', padding: '10px', backgroundColor: '#fff', borderRadius: '6px', border: '1px inset #e2e8f0' }}>
+                            <div style={{ minHeight: '60px', maxHeight: '280px', overflowY: 'auto', padding: '10px', backgroundColor: '#fff', borderRadius: '6px', border: '1px inset #e2e8f0' }}>
                               {wordItems.length === 0 && <span style={{ color: '#a0aec0', fontSize: '0.9rem', display: 'block', padding: '10px' }}>ワードがありません。上のフォームから追加してください。</span>}
                               
-                              {/* ★ 無限階層＆縦一列対応ツリー */}
+                              {/* ★ 無限階層＆高精度ドラッグ対応ツリー */}
                               {(() => {
                                 const renderWordTree = (parentId: string | null) => {
                                   const children = wordItems.filter(w => w.parentId === parentId);
@@ -829,9 +829,17 @@ export default function App() {
                                       borderRadius: parentId === null ? '0' : '6px', 
                                       marginTop: parentId === null ? '0' : '8px' 
                                     }}>
-                                      {children.map(word => (
-                                        <div key={word.id} style={{ display: 'flex', flexDirection: 'column', width: (parentId === null || word.type === 'folder') ? '100%' : 'auto' }}>
-                                          <div style={{ position: 'relative', display: 'flex', width: 'fit-content', minWidth: word.type === 'folder' ? '100%' : 'auto' }}>
+                                      {children.map(word => {
+                                        const isBlock = parentId === null || word.type === 'folder';
+                                        const isTop = dragOverWordId === `${word.id}-top`;
+                                        const isBottom = dragOverWordId === `${word.id}-bottom`;
+                                        const isLeft = dragOverWordId === `${word.id}-left`;
+                                        const isRight = dragOverWordId === `${word.id}-right`;
+                                        const isInside = dragOverWordId === `${word.id}-inside`;
+
+                                        return (
+                                        <div key={word.id} style={{ display: 'flex', flexDirection: 'column', width: isBlock ? '100%' : 'auto' }}>
+                                          <div style={{ position: 'relative', display: 'flex', width: '100%' }}>
                                             <button
                                               draggable={!isWordDeleteMode}
                                               onDragStart={(e) => { setIsDraggingWord(true); e.dataTransfer.setData('wordId', word.id); e.stopPropagation(); }}
@@ -847,8 +855,8 @@ export default function App() {
                                                 newWords.splice(draggedIndex, 1);
                                                 const targetIndex = newWords.findIndex(w => w.id === word.id);
 
-                                                if (word.type === 'folder') {
-                                                  // 無限ループ（自分の中に自分を入れる）を防止
+                                                if (dragOverWordId === `${word.id}-inside`) {
+                                                  // 中に入れる（無限ループ防止付き）
                                                   let currentParent: string | null = word.id;
                                                   let isCyclic = false;
                                                   while (currentParent) {
@@ -858,28 +866,54 @@ export default function App() {
                                                   if (!isCyclic) {
                                                     draggedItem.parentId = word.id;
                                                     newWords.push(draggedItem);
+                                                  } else {
+                                                    newWords.splice(draggedIndex, 0, draggedItem); // 戻す
                                                   }
                                                 } else {
+                                                  // 並び替え（前後）
                                                   draggedItem.parentId = word.parentId;
-                                                  newWords.splice(targetIndex + 1, 0, draggedItem);
+                                                  if (dragOverWordId === `${word.id}-top` || dragOverWordId === `${word.id}-left`) {
+                                                    newWords.splice(targetIndex, 0, draggedItem);
+                                                  } else {
+                                                    newWords.splice(targetIndex + 1, 0, draggedItem);
+                                                  }
                                                 }
                                                 setWordItems(newWords);
                                               }}
-                                              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverWordId(word.id); }}
+                                              onDragOver={(e) => { 
+                                                e.preventDefault(); e.stopPropagation(); 
+                                                const rect = e.currentTarget.getBoundingClientRect();
+                                                const y = e.clientY - rect.top;
+                                                const x = e.clientX - rect.left;
+                                                if (word.type === 'folder') {
+                                                  if (y < rect.height * 0.25) setDragOverWordId(`${word.id}-top`);
+                                                  else if (y > rect.height * 0.75) setDragOverWordId(`${word.id}-bottom`);
+                                                  else setDragOverWordId(`${word.id}-inside`);
+                                                } else {
+                                                  if (parentId === null) {
+                                                    if (y < rect.height / 2) setDragOverWordId(`${word.id}-top`);
+                                                    else setDragOverWordId(`${word.id}-bottom`);
+                                                  } else {
+                                                    if (x < rect.width / 2) setDragOverWordId(`${word.id}-left`);
+                                                    else setDragOverWordId(`${word.id}-right`);
+                                                  }
+                                                }
+                                              }}
                                               onDragLeave={() => setDragOverWordId(null)}
                                               onDoubleClick={(e) => { e.stopPropagation(); if (word.type === 'folder') { const newName = prompt('フォルダ名を変更', word.text); if (newName) setWordItems(wordItems.map(w => w.id === word.id ? { ...w, text: newName } : w)); } else { setTempBgColor(word.bgColor); setTempTextColor(word.textColor); setEditingWordId(word.id); } }}
                                               onClick={(e) => { if (isDraggingWord) return; if (word.type === 'folder') { setWordItems(wordItems.map(w => w.id === word.id ? { ...w, isOpen: !w.isOpen } : w)); } else if (!isWordDeleteMode) { handleInsertWord(word); } }}
                                               onMouseDown={(e) => { if (isWordDeleteMode) setWordItems(wordItems.filter(w => w.id !== word.id)); }}
                                               style={{ 
-                                                width: word.type === 'folder' ? '100%' : 'auto', textAlign: 'left',
+                                                width: isBlock ? '100%' : 'auto', textAlign: 'left',
                                                 padding: '6px 12px', borderRadius: word.type === 'folder' ? '6px' : '20px', 
-                                                borderBottom: (dragOverWordId === word.id && (parentId === null || word.type === 'folder')) ? '3px solid #3182ce' : '1px solid #cbd5e0', 
-                                                borderRight: (dragOverWordId === word.id && parentId !== null && word.type !== 'folder') ? '3px solid #3182ce' : '1px solid #cbd5e0', 
-                                                borderTop: '1px solid #cbd5e0', borderLeft: '1px solid #cbd5e0', 
-                                                backgroundColor: (dragOverWordId === word.id && word.type === 'folder') ? '#ebf8ff' : word.bgColor, 
+                                                borderTop: isTop ? '3px solid #3182ce' : '1px solid #cbd5e0',
+                                                borderBottom: isBottom ? '3px solid #3182ce' : '1px solid #cbd5e0',
+                                                borderLeft: isLeft ? '3px solid #3182ce' : '1px solid #cbd5e0',
+                                                borderRight: isRight ? '3px solid #3182ce' : '1px solid #cbd5e0',
+                                                backgroundColor: isInside ? '#ebf8ff' : word.bgColor, 
                                                 color: word.textColor, 
                                                 cursor: isWordDeleteMode ? 'pointer' : (word.type === 'folder' ? 'pointer' : 'grab'), 
-                                                fontWeight: 'bold', fontSize: '1rem', transition: 'all 0.1s', display: 'flex', alignItems: 'center', gap: '5px' 
+                                                fontWeight: 'bold', fontSize: '1rem', transition: 'all 0.1s', display: 'flex', alignItems: 'center', gap: '5px', boxSizing: 'border-box' 
                                               }}
                                             >
                                               {word.type === 'folder' && <span>{word.isOpen ? '📂' : '📁'}</span>}
@@ -889,7 +923,7 @@ export default function App() {
                                           </div>
                                           {word.type === 'folder' && word.isOpen && renderWordTree(word.id)}
                                         </div>
-                                      ))}
+                                      )})}
                                     </div>
                                   );
                                 }
