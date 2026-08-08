@@ -772,6 +772,7 @@ export default function App() {
                         </div>
                       </div>
                       
+                      {/* ★ 一番上に戻すためのドロップエリア */}
                       <div 
                         onDrop={(e) => {
                           e.preventDefault(); e.stopPropagation(); setDragOverWordId(null);
@@ -780,28 +781,41 @@ export default function App() {
                           const draggedIndex = newWords.findIndex(w => w.id === draggedId);
                           const draggedItem = newWords[draggedIndex];
                           newWords.splice(draggedIndex, 1);
-                          draggedItem.parentId = null; // ルートに出す
-                          newWords.push(draggedItem);
+                          draggedItem.parentId = null; // フォルダから出して一番上に
+                          newWords.unshift(draggedItem);
                           setWordItems(newWords);
                         }}
-                        onDragOver={(e) => { e.preventDefault(); setDragOverWordId('root'); }}
+                        onDragOver={(e) => { e.preventDefault(); setDragOverWordId('root-top'); }}
                         onDragLeave={() => setDragOverWordId(null)}
-                        style={{ minHeight: '60px', padding: '10px', backgroundColor: '#fff', borderRadius: '6px', border: dragOverWordId === 'root' ? '2px dashed #3182ce' : '1px inset #e2e8f0' }}
+                        style={{ padding: '8px', color: '#a0aec0', fontSize: '0.8rem', fontStyle: 'italic', borderBottom: dragOverWordId === 'root-top' ? '3px solid #3182ce' : 'none' }}
                       >
-                        {wordItems.length === 0 && <span style={{ color: '#a0aec0', fontSize: '0.9rem' }}>ワードがありません。上のフォームから追加してください。</span>}
+                        ↓ ここにドロップしてフォルダから出す・一番上に移動
+                      </div>
+
+                      <div style={{ minHeight: '60px', padding: '10px', backgroundColor: '#fff', borderRadius: '6px', border: '1px inset #e2e8f0' }}>
+                        {wordItems.length === 0 && <span style={{ color: '#a0aec0', fontSize: '0.9rem', display: 'block', padding: '10px' }}>ワードがありません。上のフォームから追加してください。</span>}
                         
-                        {/* ★ ツリーレンダリング（フォルダ階層対応＆並び替え強化） */}
+                        {/* ★ ツリーレンダリング（部屋UI風の縦並び＆フォルダ内横並び対応） */}
                         {(() => {
                           const renderWordTree = (parentId: string | null) => {
                             const children = wordItems.filter(w => w.parentId === parentId);
                             if (children.length === 0 && parentId !== null) return null;
                             
                             return (
-                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', width: '100%', paddingLeft: parentId ? '15px' : '0', borderLeft: parentId ? '2px dashed #cbd5e0' : 'none', marginTop: parentId ? '10px' : '0' }}>
+                              <div style={{ 
+                                display: 'flex', 
+                                flexDirection: parentId === null ? 'column' : 'row', 
+                                flexWrap: parentId === null ? 'nowrap' : 'wrap', 
+                                gap: parentId === null ? '8px' : '10px', 
+                                width: '100%', 
+                                padding: parentId === null ? '0' : '10px', 
+                                backgroundColor: parentId === null ? 'transparent' : '#edf2f7', 
+                                borderRadius: parentId === null ? '0' : '6px', 
+                                marginTop: parentId === null ? '0' : '8px' 
+                              }}>
                                 {children.map(word => (
-                                  // ★ フォルダの場合は width: '100%' にして1行独占する
-                                  <div key={word.id} style={{ display: 'flex', flexDirection: 'column', gap: '5px', width: word.type === 'folder' ? '100%' : 'auto' }}>
-                                    <div style={{ position: 'relative', display: 'inline-block' }}>
+                                  <div key={word.id} style={{ display: 'flex', flexDirection: 'column', width: parentId === null ? '100%' : 'auto' }}>
+                                    <div style={{ position: 'relative', display: 'flex', width: 'fit-content' }}>
                                       <button
                                         draggable={!isWordDeleteMode}
                                         onDragStart={(e) => { e.dataTransfer.setData('wordId', word.id); e.stopPropagation(); }}
@@ -816,12 +830,12 @@ export default function App() {
                                           newWords.splice(draggedIndex, 1);
                                           const targetIndex = newWords.findIndex(w => w.id === word.id);
 
-                                          if (word.type === 'folder') {
-                                            // フォルダに落とした場合は中に入れる
+                                          if (word.type === 'folder' && parentId === null) {
+                                            // ルートのフォルダに落とした場合は中に入れる
                                             draggedItem.parentId = word.id;
                                             newWords.push(draggedItem);
                                           } else {
-                                            // 単語に落とした場合はその単語の「直後」に並び替える
+                                            // 単語に落とした場合、またはフォルダ内に落とした場合は並び替え（直後に割り込み）
                                             draggedItem.parentId = word.parentId;
                                             newWords.splice(targetIndex + 1, 0, draggedItem);
                                           }
@@ -848,7 +862,18 @@ export default function App() {
                                             handleInsertWord(e, word);
                                           }
                                         }}
-                                        style={{ padding: '6px 12px', borderRadius: word.type === 'folder' ? '6px' : '20px', border: dragOverWordId === word.id ? '2px dashed #3182ce' : '1px solid #cbd5e0', backgroundColor: word.bgColor, color: word.textColor, cursor: isWordDeleteMode ? 'pointer' : (word.type === 'folder' ? 'pointer' : 'grab'), fontWeight: 'bold', fontSize: '1rem', transition: 'transform 0.1s', display: 'flex', alignItems: 'center', gap: '5px' }}
+                                        style={{ 
+                                          padding: '6px 12px', 
+                                          borderRadius: word.type === 'folder' ? '6px' : '20px', 
+                                          // ★ 青い補助線（ルートなら下線、フォルダ内なら右線で割り込みを表現）
+                                          borderBottom: (dragOverWordId === word.id && parentId === null) ? '3px solid #3182ce' : '1px solid #cbd5e0',
+                                          borderRight: (dragOverWordId === word.id && parentId !== null) ? '3px solid #3182ce' : '1px solid #cbd5e0',
+                                          borderTop: '1px solid #cbd5e0', borderLeft: '1px solid #cbd5e0',
+                                          backgroundColor: (dragOverWordId === word.id && word.type === 'folder' && parentId === null) ? '#ebf8ff' : word.bgColor, 
+                                          color: word.textColor, 
+                                          cursor: isWordDeleteMode ? 'pointer' : (word.type === 'folder' ? 'pointer' : 'grab'), 
+                                          fontWeight: 'bold', fontSize: '1rem', transition: 'all 0.1s', display: 'flex', alignItems: 'center', gap: '5px' 
+                                        }}
                                       >
                                         {word.type === 'folder' && <span>{word.isOpen ? '📂' : '📁'}</span>}
                                         {word.text}
@@ -973,24 +998,34 @@ export default function App() {
                     // ★ 英単語モードの自動フォーマット処理
                     if (isEnglishMode && engWord.trim()) {
                       let phonetic = engPhonetic.trim();
-                      let formattedWord = engWord.trim().toLowerCase();
+                      let rawWord = engWord.trim().toLowerCase();
+                      let formattedWord = rawWord;
                       
-                      // ① 発音記号が空なら無料APIから取得
+                      // ① 発音記号が空なら無料APIから取得し、一般的なIPAに補正
                       if (!phonetic) {
                         try {
-                          const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${formattedWord}`);
+                          const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${rawWord}`);
                           if (res.ok) {
                             const data = await res.json();
-                            phonetic = data[0]?.phonetic || data[0]?.phonetics?.find((p: any) => p.text)?.text || '';
+                            const phonetics = data[0]?.phonetics || [];
+                            // アクセント記号(ˈ)が含まれているものを優先して取得
+                            let phText = phonetics.find((p: any) => p.text && p.text.includes('ˈ'))?.text 
+                                      || phonetics.find((p: any) => p.text)?.text 
+                                      || data[0]?.phonetic 
+                                      || '';
+                            // 日本の辞書で一般的な表記に調整 (ɹ -> r, ɡ -> g)
+                            phonetic = phText.replace(/ɹ/g, 'r').replace(/ɡ/g, 'g');
                           }
                         } catch (e) {}
                       }
                       
-                      // ② 音節の自動区切り処理（W/Yの接続条件ルール等の適用）
-                      formattedWord = formattedWord
-                        .replace(/([aeiouy])([^aeiouwy\s])([aeiouy])/gi, "$1-$2$3")
-                        .replace(/([aeiouy])([wy])([aeiouy])/gi, "$1-$2$3")
-                        .replace(/([aeiouy])([^aeiouwy\s]{2})([aeiouy])/gi, "$1$2-$3");
+                      // ② 音節の自動区切り処理（より正確なアルゴリズム）
+                      const syllabify = (w: string) => {
+                        // 母音グループと子音のまとまりを判別する標準的な音節分解ヒューリスティック
+                        const m = w.match(/[^aeiouy]*[aeiouy]+(?:[^aeiouy]*$|[^aeiouy](?=[^aeiouy]))?/gi);
+                        return m ? m.join('-') : w;
+                      };
+                      formattedWord = syllabify(rawWord);
                       
                       // ③ Qボックスの先頭に美しく挿入
                       const engHeader = `<div style="margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px dashed #cbd5e0; display: flex; align-items: baseline; gap: 15px;"><strong style="font-size: 1.4em; color: #2b6cb0; letter-spacing: 1px;">${formattedWord}</strong><span style="font-family: sans-serif; color: #718096; font-size: 1.1em;">${phonetic}</span></div>`;
