@@ -273,11 +273,14 @@ export default function App() {
   const [newWordText, setNewWordText] = useState('') // ←追加：常時入力フォーム用
   const [dragOverWordId, setDragOverWordId] = useState<string | null>(null) // ←追加：ドラッグ＆ドロップ判定用
   
-  // ワードをエディタに挿入する関数（フォーカスを外さずに入力する）
+　const [isEnglishMode, setIsEnglishMode] = useState(false)
+  const [engWord, setEngWord] = useState('')
+  const [engPhonetic, setEngPhonetic] = useState('')
+
   const handleInsertWord = (e: React.MouseEvent, word: WordItem) => {
     e.preventDefault();
-    // contenteditable="false" でブロック化し、&#8203; (ゼロ幅スペース) で元の黒文字スタイルにリセットする
-    const html = `<span style="background-color: ${word.bgColor}; color: ${word.textColor}; padding: 2px 4px; border-radius: 4px; margin: 0 2px;" contenteditable="false">${word.text}</span>&#8203;`;
+    // 改行バグを防ぐため、inline-block と nowrap を強制し、直後にゼロ幅スペース(&#8203;)を置く
+    const html = `<span style="background-color: ${word.bgColor}; color: ${word.textColor}; padding: 1px 4px; border-radius: 4px; margin: 0 2px; display: inline-block; white-space: nowrap; user-select: none;" contenteditable="false">${word.text}</span>&#8203;`;
     document.execCommand('insertHTML', false, html);
   };
 
@@ -727,10 +730,14 @@ export default function App() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem' }}><label>文字サイズ:</label><input type="range" min="5" max="32" value={fontSize} onChange={(e) => setFontSize(Number(e.target.value))} /><span>{fontSize}px</span></div>
                   </div>
                   
-                  <div style={{ display: 'flex', gap: '10px', marginBottom: '8px', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: '10px', marginBottom: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                     <RichToolbar hasSelection={hasSelection} />
                     <button onClick={() => setShowWordPanel(!showWordPanel)} style={{ ...btnStyle, backgroundColor: showWordPanel ? '#3182ce' : '#e2e8f0', color: showWordPanel ? 'white' : '#2d3748' }}>
                       {showWordPanel ? '単語枠を閉じる' : '🔤 単語枠を開く'}
+                    </button>
+                    {/* ★ 英単語モード切り替えボタン */}
+                    <button onClick={() => setIsEnglishMode(!isEnglishMode)} style={{ ...btnStyle, backgroundColor: isEnglishMode ? '#805ad5' : '#e2e8f0', color: isEnglishMode ? 'white' : '#2d3748' }}>
+                      {isEnglishMode ? '英単語モードをオフ' : '🇺🇸 英単語モード'}
                     </button>
                   </div>
                   {/* ★ ワード一覧枠（パレット） */}
@@ -937,6 +944,13 @@ export default function App() {
                         <button onClick={() => handleFloatingImageInsertBtn(true)} style={miniBtnStyle}>🖼 画像</button>
                       </div>
                       <div style={innerInputStyle(createExpanded === 'q')}>
+                        {/* ★ 英単語モード専用入力欄 */}
+                        {isEnglishMode && (
+                          <div style={{ display: 'flex', gap: '10px', paddingBottom: '10px', marginBottom: '10px', borderBottom: '2px dashed #cbd5e0' }}>
+                            <input type="text" placeholder="英単語を入力..." value={engWord} onChange={(e) => setEngWord(e.target.value)} style={{ flex: 1, padding: '6px', borderRadius: '4px', border: '1px solid #a0aec0', fontSize: '1rem', outline: 'none' }} />
+                            <input type="text" placeholder="発音記号 (自動)" value={engPhonetic} onChange={(e) => setEngPhonetic(e.target.value)} style={{ width: '120px', padding: '6px', borderRadius: '4px', border: '1px solid #a0aec0', backgroundColor: '#f7fafc', fontSize: '0.9rem', outline: 'none' }} />
+                          </div>
+                        )}
                         {renderNewImages(qImages, true)}
                         <div ref={questionRef} contentEditable className="rich-text-content" onDrop={(e) => handleDropFromStock(e, true)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, minHeight: '100px', outline: 'none', fontSize: `${createExpanded === 'q' ? tempCreateFontSize : fontSize}px`, textAlign: 'left' }} />
                       </div>
@@ -952,8 +966,41 @@ export default function App() {
                       </div>
                     </div>
                   </div>
-                  <button onClick={() => {
-                    const qHTML = questionRef.current?.innerHTML || ''; const aHTML = answerRef.current?.innerHTML || ''
+                  <button onClick={async () => {
+                    let qHTML = questionRef.current?.innerHTML || ''; 
+                    const aHTML = answerRef.current?.innerHTML || '';
+
+                    // ★ 英単語モードの自動フォーマット処理
+                    if (isEnglishMode && engWord.trim()) {
+                      let phonetic = engPhonetic.trim();
+                      let formattedWord = engWord.trim().toLowerCase();
+                      
+                      // ① 発音記号が空なら無料APIから取得
+                      if (!phonetic) {
+                        try {
+                          const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${formattedWord}`);
+                          if (res.ok) {
+                            const data = await res.json();
+                            phonetic = data[0]?.phonetic || data[0]?.phonetics?.find((p: any) => p.text)?.text || '';
+                          }
+                        } catch (e) {}
+                      }
+                      
+                      // ② 音節の自動区切り処理（W/Yの接続条件ルール等の適用）
+                      formattedWord = formattedWord
+                        .replace(/([aeiouy])([^aeiouwy\s])([aeiouy])/gi, "$1-$2$3")
+                        .replace(/([aeiouy])([wy])([aeiouy])/gi, "$1-$2$3")
+                        .replace(/([aeiouy])([^aeiouwy\s]{2})([aeiouy])/gi, "$1$2-$3");
+                      
+                      // ③ Qボックスの先頭に美しく挿入
+                      const engHeader = `<div style="margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px dashed #cbd5e0; display: flex; align-items: baseline; gap: 15px;"><strong style="font-size: 1.4em; color: #2b6cb0; letter-spacing: 1px;">${formattedWord}</strong><span style="font-family: sans-serif; color: #718096; font-size: 1.1em;">${phonetic}</span></div>`;
+                      qHTML = engHeader + qHTML;
+                      
+                      // 入力欄をリセット
+                      setEngWord('');
+                      setEngPhonetic('');
+                    }
+
                     if (!qHTML.trim() && !aHTML.trim() && qImages.length === 0 && aImages.length === 0) return alert('入力してください。')
                     if (editingCardId) { setItems(items.map(i => i.id === activeFileId ? { ...i, cards: i.cards.map(c => c.id === editingCardId ? { ...c, question: qHTML, answer: aHTML, qImages: [...qImages], aImages: [...aImages], fontSize } : c) } : i)); setEditingCardId(null); }
                     else { const newCard: Card = { id: Date.now().toString(), question: qHTML, answer: aHTML, qImages: [...qImages], aImages: [...aImages], fontSize }; setItems(items.map(i => i.id === activeFileId ? { ...i, cards: [...i.cards, newCard] } : i)) }
@@ -982,7 +1029,7 @@ export default function App() {
 const btnStyle = { padding: '8px 16px', borderRadius: '6px', border: '1px solid #cbd5e0', backgroundColor: '#ffffff', cursor: 'pointer', fontWeight: 'bold' as const, color: '#2d3748' }
 const miniBtnStyle = { padding: '4px 8px', fontSize: '0.8rem', borderRadius: '4px', border: '1px solid #ccc', cursor: 'pointer', backgroundColor: '#f7fafc', fontWeight: 'bold' as const, color: '#2d3748' }
 const expandBtnStyleBig = { padding: '8px 16px', fontSize: '1rem', borderRadius: '6px', border: '2px solid #a0aec0', cursor: 'pointer', backgroundColor: '#edf2f7', fontWeight: 'bold' as const, color: '#2d3748' }
-const baseInputStyle = { fontFamily: 'sans-serif', position: 'relative' as const, height: '250px', width: '100%', minWidth: '0', maxWidth: '100%', border: '1px solid #cbd5e0', /* ...以下略 */ }
+const baseInputStyle = { fontFamily: 'sans-serif', position: 'relative' as const, height: '250px', width: '100%', minWidth: '0', maxWidth: '100%', border: '1px solid #cbd5e0', borderRadius: '6px', padding: '10px', backgroundColor: '#fff', outline: 'none', overflowX: 'auto' as const, overflowY: 'auto' as const, whiteSpace: 'pre-wrap' as const, boxSizing: 'border-box' as const, textAlign: 'left' as const, color: '#2d3748', display: 'flex', flexDirection: 'column' }
 const expandedQStyle = { position: 'fixed', top: 0, left: 0, width: '50vw', height: '100vh', zIndex: 10000, padding: '40px', boxShadow: '4px 0 15px rgba(0,0,0,0.2)', backgroundColor: '#fff', display: 'flex', flexDirection: 'column' as const, boxSizing: 'border-box' as const, color: '#2d3748' }
 const expandedAStyle = { position: 'fixed', top: 0, right: 0, width: '50vw', height: '100vh', zIndex: 10000, padding: '40px', boxShadow: '-4px 0 15px rgba(0,0,0,0.2)', backgroundColor: '#fff', display: 'flex', flexDirection: 'column' as const, boxSizing: 'border-box' as const, color: '#2d3748' }
-const innerInputStyle = (isExpanded: boolean) => ({ ...(isExpanded ? { flex: 1, height: '100%', width: '100%', border: '1px solid #e2e8f0', padding: '10px', overflowX: 'auto' as const, overflowY: 'auto' as const, position: 'relative' as const, whiteSpace: 'pre' as const, boxSizing: 'border-box' as const, textAlign: 'left' as const, color: '#2d3748', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column' } : baseInputStyle) } as React.CSSProperties)
+const innerInputStyle = (isExpanded: boolean) => ({ ...(isExpanded ? { flex: 1, height: '100%', width: '100%', border: '1px solid #e2e8f0', padding: '10px', overflowX: 'auto' as const, overflowY: 'auto' as const, position: 'relative' as const, whiteSpace: 'pre-wrap' as const, boxSizing: 'border-box' as const, textAlign: 'left' as const, color: '#2d3748', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column' } : baseInputStyle) } as React.CSSProperties)
