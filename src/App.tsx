@@ -264,6 +264,31 @@ export default function App() {
   
   const [isDataLoaded, setIsDataLoaded] = useState(false)
 
+  // ★ ここから追加（隠しコマンド用）
+  const [secretClicks, setSecretClicks] = useState(0);
+  useEffect(() => {
+    if (secretClicks > 0) {
+      // 1秒間クリックがなければ回数をリセットする
+      const timer = setTimeout(() => setSecretClicks(0), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [secretClicks]);
+
+  const handleSecretClick = () => {
+    const newCount = secretClicks + 1;
+    setSecretClicks(newCount);
+    if (newCount >= 5) {
+      // 現在の全データのバイト数を計算（文字列化してBlobサイズを取得）
+      const byteSize = new Blob([JSON.stringify(items)]).size;
+      const mbSize = (byteSize / 1024 / 1024).toFixed(2);
+      const percentage = ((Number(mbSize) / 500) * 100).toFixed(2);
+      
+      alert(`📊 【開発者モード：データ使用量】\n\n現在の総データサイズ: 約 ${mbSize} MB\n（無料枠 500MB のうち 約 ${percentage}% を使用中）\n\n※ストレージ容量は0GBです。`);
+      setSecretClicks(0);
+    }
+  };
+  // ★ ここまで追加
+
   const questionRef = useRef<HTMLDivElement>(null)
   const answerRef = useRef<HTMLDivElement>(null)
   
@@ -456,7 +481,13 @@ export default function App() {
         <div style={{ maxWidth: '900px', margin: '40px auto', padding: '20px', fontFamily: '"Zen Maru Gothic", sans-serif' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '2px solid #e2e8f0', paddingBottom: '15px', marginBottom: '20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-              <img src="/logo.jpg" alt="ロゴ" style={{ width: '60px', height: '60px', borderRadius: '12px', objectFit: 'cover' }} />
+              {/* ★ ロゴ画像に隠しコマンドの発動条件（onClick）を追加 */}
+              <img 
+                src="/logo.jpg" 
+                alt="ロゴ" 
+                onClick={handleSecretClick}
+                style={{ width: '60px', height: '60px', borderRadius: '12px', objectFit: 'cover', cursor: 'pointer', userSelect: 'none' }} 
+              />
               <h1 style={{ color: isDarkMode ? '#ffffff' : '#2d3748', margin: 0, fontSize: '2.2rem', letterSpacing: '2px', fontFamily: '"Zen Maru Gothic", sans-serif', fontWeight: 900 }}>キオクシヨ</h1>
             </div>
             <div style={{ display: 'flex', gap: '10px' }}>
