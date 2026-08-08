@@ -32,7 +32,7 @@ const supabase = createClient(supabaseUrl, supabaseKey)
 
 // --- 型定義 ---
 interface FloatingImage { id: string; src: string; x: number; y: number; width: number; height: number; pinned?: boolean }
-interface StockImage { id: string; src: string }
+interface StockImage { id: string; src: string; type?: 'image' | 'folder'; name?: string; parentId?: string | null; isOpen?: boolean }
 interface Card { id: string; question: string; answer: string; qImages: FloatingImage[]; aImages: FloatingImage[]; fontSize: number }
 type ItemType = 'file' | 'folder'
 interface AppItem { id: string; type: ItemType; name: string; parentId: string | null; cards: Card[] }
@@ -275,8 +275,9 @@ export default function App() {
   
   // ワードをエディタに挿入する関数（フォーカスを外さずに入力する）
   const handleInsertWord = (e: React.MouseEvent, word: WordItem) => {
-    e.preventDefault(); // エディタからフォーカスが外れるのを防ぐ
-    const html = `<span style="background-color: ${word.bgColor}; color: ${word.textColor}; padding: 2px 4px; border-radius: 4px; margin: 0 2px;">${word.text}</span>`;
+    e.preventDefault();
+    // contenteditable="false" でブロック化し、&#8203; (ゼロ幅スペース) で元の黒文字スタイルにリセットする
+    const html = `<span style="background-color: ${word.bgColor}; color: ${word.textColor}; padding: 2px 4px; border-radius: 4px; margin: 0 2px;" contenteditable="false">${word.text}</span>&#8203;`;
     document.execCommand('insertHTML', false, html);
   };
 
@@ -361,6 +362,21 @@ export default function App() {
     };
     saveCloudData();
   }, [items, isDataLoaded, session]);
+
+　useEffect(() => {
+    const savedWords = localStorage.getItem('kiokushiyo_words');
+    if (savedWords) setWordItems(JSON.parse(savedWords));
+    const savedStock = localStorage.getItem('kiokushiyo_stock');
+    if (savedStock) setStockImages(JSON.parse(savedStock));
+  }, []);
+
+  useEffect(() => {
+    if (wordItems.length > 0) localStorage.setItem('kiokushiyo_words', JSON.stringify(wordItems));
+  }, [wordItems]);
+
+  useEffect(() => {
+    if (stockImages.length > 0) localStorage.setItem('kiokushiyo_stock', JSON.stringify(stockImages));
+  }, [stockImages]);
 
   // ★ サインアップ処理
   const handleSignUp = async (e: React.FormEvent) => {
@@ -649,15 +665,57 @@ export default function App() {
             <div style={{ flex: 1, width: '100%', maxWidth: '100%' }}>
               
               {!isTestMode && (
-                <div onPaste={handleStockPaste} onDrop={handleStockFileDrop} onDragOver={(e) => e.preventDefault()} tabIndex={0} style={{ width: '100%', boxSizing: 'border-box', backgroundColor: '#e2e8f0', color: '#2d3748', border: '2px dashed #a0aec0', borderRadius: '8px', padding: '15px', marginBottom: '20px', outline: 'none' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}><strong style={{ fontSize: '0.9rem' }}>スクショ箱 (ペースト・ドロップ)</strong><button onClick={() => { if(window.confirm('スクショ箱の画像をすべて削除しますか？')) setStockImages([]) }} style={{ ...miniBtnStyle, color: '#e53e3e' }}>一括削除</button></div>
-                  <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', minHeight: '80px', paddingBottom: '10px' }}>
-                    {stockImages.map(img => (
-                      <div key={img.id} style={{ position: 'relative', width: '150px', flexShrink: 0, backgroundColor: '#fff', padding: '4px', borderRadius: '4px', boxShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>
-                        <button onClick={() => setStockImages(s => s.filter(x => x.id !== img.id))} style={{ position: 'absolute', top: -5, right: -5, background: 'red', color: 'white', border: 'none', borderRadius: '50%', width: '20px', height: '20px', cursor: 'pointer', fontSize: '10px' }}>×</button>
-                        <img src={img.src} draggable onDragStart={(e) => e.dataTransfer.setData('stockImage', img.src)} style={{ width: '100%', cursor: 'grab', borderRadius: '2px' }} alt="" />
-                      </div>
-                    ))}
+                <div onPaste={handleStockPaste} onDrop={(e) => { e.preventDefault(); handleStockFileDrop(e); const stockId = e.dataTransfer.getData('stockId'); if(stockId){ const newStock = [...stockImages]; const idx = newStock.findIndex(s=>s.id===stockId); const item = newStock[idx]; newStock.splice(idx,1); item.parentId = null; newStock.push(item); setStockImages(newStock); } }} onDragOver={(e) => e.preventDefault()} tabIndex={0} style={{ width: '100%', boxSizing: 'border-box', backgroundColor: '#e2e8f0', color: '#2d3748', border: '2px dashed #a0aec0', borderRadius: '8px', padding: '15px', marginBottom: '20px', outline: 'none' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                    <strong style={{ fontSize: '0.9rem' }}>スクショ箱 (ペースト・ドロップ)</strong>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button onClick={() => setStockImages([...stockImages, { id: `sfolder-${Date.now()}`, src: '', type: 'folder', name: '新規フォルダ', parentId: null, isOpen: false }])} style={miniBtnStyle}>📁 フォルダ</button>
+                      <button onClick={() => { if(window.confirm('スクショ箱の画像をすべて削除しますか？')) setStockImages([]) }} style={{ ...miniBtnStyle, color: '#e53e3e' }}>一括削除</button>
+                    </div>
+                  </div>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', minHeight: '80px' }}>
+                    {(() => {
+                      const renderStockTree = (parentId: string | null) => {
+                        const children = stockImages.filter(s => (s.parentId || null) === parentId);
+                        if (children.length === 0 && parentId !== null) return null;
+                        return (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', paddingLeft: parentId ? '15px' : '0', borderLeft: parentId ? '2px dashed #a0aec0' : 'none', marginTop: parentId ? '5px' : '0', width: '100%' }}>
+                            {children.map(img => (
+                              <div key={img.id} style={{ display: 'flex', flexDirection: 'column', gap: '5px', width: img.type === 'folder' ? '100%' : 'auto' }}>
+                                {img.type === 'folder' ? (
+                                  <div
+                                    draggable
+                                    onDragStart={(e) => { e.dataTransfer.setData('stockId', img.id); e.stopPropagation(); }}
+                                    onDrop={(e) => {
+                                      e.preventDefault(); e.stopPropagation();
+                                      const draggedId = e.dataTransfer.getData('stockId'); if (!draggedId || draggedId === img.id) return;
+                                      const newStock = [...stockImages]; const draggedIndex = newStock.findIndex(w => w.id === draggedId);
+                                      const draggedItem = newStock[draggedIndex]; newStock.splice(draggedIndex, 1);
+                                      draggedItem.parentId = img.id; newStock.push(draggedItem); setStockImages(newStock);
+                                    }}
+                                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                    onDoubleClick={() => { const newName = prompt('フォルダ名', img.name); if (newName) setStockImages(stockImages.map(s => s.id === img.id ? { ...s, name: newName } : s)); }}
+                                    onClick={() => setStockImages(stockImages.map(s => s.id === img.id ? { ...s, isOpen: !s.isOpen } : s))}
+                                    style={{ padding: '8px 12px', backgroundColor: '#fff', borderRadius: '6px', cursor: 'pointer', border: '1px solid #cbd5e0', display: 'inline-flex', alignItems: 'center', gap: '8px', fontWeight: 'bold' }}
+                                  >
+                                    {img.isOpen ? '📂' : '📁'} {img.name}
+                                    <button onClick={(e) => { e.stopPropagation(); setStockImages(stockImages.filter(x => x.id !== img.id)) }} style={{ marginLeft: 'auto', background: 'red', color: 'white', border: 'none', borderRadius: '50%', width: '18px', height: '18px', cursor: 'pointer', fontSize: '10px' }}>×</button>
+                                  </div>
+                                ) : (
+                                  <div style={{ position: 'relative', width: '150px', flexShrink: 0, backgroundColor: '#fff', padding: '4px', borderRadius: '4px', boxShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>
+                                    <button onClick={() => setStockImages(s => s.filter(x => x.id !== img.id))} style={{ position: 'absolute', top: -5, right: -5, background: 'red', color: 'white', border: 'none', borderRadius: '50%', width: '20px', height: '20px', cursor: 'pointer', fontSize: '10px' }}>×</button>
+                                    <img src={img.src} draggable onDragStart={(e) => { e.dataTransfer.setData('stockId', img.id); e.stopPropagation(); }} style={{ width: '100%', cursor: 'grab', borderRadius: '2px' }} alt="" />
+                                  </div>
+                                )}
+                                {img.type === 'folder' && img.isOpen && renderStockTree(img.id)}
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      };
+                      return renderStockTree(null);
+                    })()}
                   </div>
                 </div>
               )}
@@ -709,12 +767,15 @@ export default function App() {
                       
                       <div 
                         onDrop={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setDragOverWordId(null);
-                          const draggedId = e.dataTransfer.getData('wordId');
-                          if(!draggedId) return;
-                          setWordItems(wordItems.map(w => w.id === draggedId ? { ...w, parentId: null } : w));
+                          e.preventDefault(); e.stopPropagation(); setDragOverWordId(null);
+                          const draggedId = e.dataTransfer.getData('wordId'); if(!draggedId) return;
+                          const newWords = [...wordItems];
+                          const draggedIndex = newWords.findIndex(w => w.id === draggedId);
+                          const draggedItem = newWords[draggedIndex];
+                          newWords.splice(draggedIndex, 1);
+                          draggedItem.parentId = null; // ルートに出す
+                          newWords.push(draggedItem);
+                          setWordItems(newWords);
                         }}
                         onDragOver={(e) => { e.preventDefault(); setDragOverWordId('root'); }}
                         onDragLeave={() => setDragOverWordId(null)}
@@ -722,7 +783,7 @@ export default function App() {
                       >
                         {wordItems.length === 0 && <span style={{ color: '#a0aec0', fontSize: '0.9rem' }}>ワードがありません。上のフォームから追加してください。</span>}
                         
-                        {/* ★ ツリーレンダリング（フォルダ階層対応） */}
+                        {/* ★ ツリーレンダリング（フォルダ階層対応＆並び替え強化） */}
                         {(() => {
                           const renderWordTree = (parentId: string | null) => {
                             const children = wordItems.filter(w => w.parentId === parentId);
@@ -731,7 +792,8 @@ export default function App() {
                             return (
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', width: '100%', paddingLeft: parentId ? '15px' : '0', borderLeft: parentId ? '2px dashed #cbd5e0' : 'none', marginTop: parentId ? '10px' : '0' }}>
                                 {children.map(word => (
-                                  <div key={word.id} style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                                  // ★ フォルダの場合は width: '100%' にして1行独占する
+                                  <div key={word.id} style={{ display: 'flex', flexDirection: 'column', gap: '5px', width: word.type === 'folder' ? '100%' : 'auto' }}>
                                     <div style={{ position: 'relative', display: 'inline-block' }}>
                                       <button
                                         draggable={!isWordDeleteMode}
@@ -740,15 +802,23 @@ export default function App() {
                                           e.preventDefault(); e.stopPropagation(); setDragOverWordId(null);
                                           const draggedId = e.dataTransfer.getData('wordId');
                                           if (!draggedId || draggedId === word.id) return;
+                                          
+                                          const newWords = [...wordItems];
+                                          const draggedIndex = newWords.findIndex(w => w.id === draggedId);
+                                          const draggedItem = newWords[draggedIndex];
+                                          newWords.splice(draggedIndex, 1);
+                                          const targetIndex = newWords.findIndex(w => w.id === word.id);
+
                                           if (word.type === 'folder') {
-                                            // フォルダに入れる（無限ループ防止）
-                                            let currentParent: string | null = word.id;
-                                            while(currentParent) { if(currentParent === draggedId) return; currentParent = wordItems.find(i=>i.id===currentParent)?.parentId || null; }
-                                            setWordItems(wordItems.map(w => w.id === draggedId ? { ...w, parentId: word.id } : w));
+                                            // フォルダに落とした場合は中に入れる
+                                            draggedItem.parentId = word.id;
+                                            newWords.push(draggedItem);
                                           } else {
-                                            // ワードにドロップした場合は同じフォルダに並べる
-                                            setWordItems(wordItems.map(w => w.id === draggedId ? { ...w, parentId: word.parentId } : w));
+                                            // 単語に落とした場合はその単語の「直後」に並び替える
+                                            draggedItem.parentId = word.parentId;
+                                            newWords.splice(targetIndex + 1, 0, draggedItem);
                                           }
+                                          setWordItems(newWords);
                                         }}
                                         onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverWordId(word.id); }}
                                         onDragLeave={() => setDragOverWordId(null)}
@@ -758,15 +828,11 @@ export default function App() {
                                             const newName = prompt('フォルダ名を変更', word.text);
                                             if (newName) setWordItems(wordItems.map(w => w.id === word.id ? { ...w, text: newName } : w));
                                           } else {
-                                            setTempBgColor(word.bgColor);
-                                            setTempTextColor(word.textColor);
-                                            setEditingWordId(word.id);
+                                            setTempBgColor(word.bgColor); setTempTextColor(word.textColor); setEditingWordId(word.id);
                                           }
                                         }}
                                         onClick={(e) => {
-                                          if (word.type === 'folder') {
-                                            setWordItems(wordItems.map(w => w.id === word.id ? { ...w, isOpen: !w.isOpen } : w));
-                                          }
+                                          if (word.type === 'folder') setWordItems(wordItems.map(w => w.id === word.id ? { ...w, isOpen: !w.isOpen } : w));
                                         }}
                                         onMouseDown={(e) => {
                                           if (isWordDeleteMode) {
