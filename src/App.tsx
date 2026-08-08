@@ -37,6 +37,8 @@ interface Card { id: string; question: string; answer: string; qImages: Floating
 type ItemType = 'file' | 'folder'
 interface AppItem { id: string; type: ItemType; name: string; parentId: string | null; cards: Card[] }
 
+interface WordItem { id: string; type: 'word' | 'folder'; text: string; bgColor: string; textColor: string; parentId: string | null; isOpen: boolean }
+
 // --- ユーティリティ ---
 const renderLatex = (htmlString: string) => {
   if (!htmlString) return '';
@@ -263,6 +265,17 @@ export default function App() {
   const [hasSelection, setHasSelection] = useState(false)
   
   const [isDataLoaded, setIsDataLoaded] = useState(false)
+
+const [showWordPanel, setShowWordPanel] = useState(false)
+  const [wordItems, setWordItems] = useState<WordItem[]>([])
+  const [isWordDeleteMode, setIsWordDeleteMode] = useState(false)
+  
+  // ワードをエディタに挿入する関数（フォーカスを外さずに入力する）
+  const handleInsertWord = (e: React.MouseEvent, word: WordItem) => {
+    e.preventDefault(); // エディタからフォーカスが外れるのを防ぐ
+    const html = `<span style="background-color: ${word.bgColor}; color: ${word.textColor}; padding: 2px 4px; border-radius: 4px; margin: 0 2px;">${word.text}</span>`;
+    document.execCommand('insertHTML', false, html);
+  };
 
   // ★ ここから追加（隠しコマンド用）
   const [secretClicks, setSecretClicks] = useState(0);
@@ -640,7 +653,55 @@ export default function App() {
                     <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#4a5568' }}>{editingCardId ? 'カード編集' : '新規追加'}</h3>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem' }}><label>文字サイズ:</label><input type="range" min="5" max="32" value={fontSize} onChange={(e) => setFontSize(Number(e.target.value))} /><span>{fontSize}px</span></div>
                   </div>
-                  <RichToolbar hasSelection={hasSelection} />
+                  
+                  <div style={{ display: 'flex', gap: '10px', marginBottom: '8px', alignItems: 'center' }}>
+                    <RichToolbar hasSelection={hasSelection} />
+                    <button onClick={() => setShowWordPanel(!showWordPanel)} style={{ ...btnStyle, backgroundColor: showWordPanel ? '#3182ce' : '#e2e8f0', color: showWordPanel ? 'white' : '#2d3748' }}>
+                      {showWordPanel ? '単語枠を閉じる' : '🔤 単語枠を開く'}
+                    </button>
+                  </div>
+                  {/* ★ ワード一覧枠（パレット） */}
+                  {showWordPanel && (
+                    <div style={{ width: '100%', backgroundColor: '#f7fafc', border: '2px solid #cbd5e0', borderRadius: '8px', padding: '15px', marginBottom: '15px', boxSizing: 'border-box' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '10px' }}>
+                        <strong style={{ color: '#4a5568' }}>ワード一覧（タップで挿入）</strong>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button onClick={() => {
+                            const text = prompt('追加するワードを入力してください');
+                            if (text) setWordItems([...wordItems, { id: `word-${Date.now()}`, type: 'word', text, bgColor: '#bee3f8', textColor: '#2b6cb0', parentId: null, isOpen: true }]);
+                          }} style={miniBtnStyle}>＋ 新規ワード</button>
+                          <button onClick={() => setIsWordDeleteMode(!isWordDeleteMode)} style={{ ...miniBtnStyle, backgroundColor: isWordDeleteMode ? '#e53e3e' : '#f7fafc', color: isWordDeleteMode ? 'white' : '#2d3748' }}>
+                            {isWordDeleteMode ? '完了' : '🗑 整理'}
+                          </button>
+                        </div>
+                      </div>
+                      
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', minHeight: '50px', padding: '10px', backgroundColor: '#fff', borderRadius: '6px', border: '1px inset #e2e8f0' }}>
+                        {wordItems.length === 0 && <span style={{ color: '#a0aec0', fontSize: '0.9rem' }}>ワードがありません。「＋新規ワード」から追加してください。</span>}
+                        {wordItems.map(word => (
+                          <div key={word.id} style={{ position: 'relative' }}>
+                            <button
+                              onMouseDown={(e) => {
+                                if (isWordDeleteMode) {
+                                  // 削除モード時は削除だけ行う
+                                  setWordItems(wordItems.filter(w => w.id !== word.id));
+                                } else {
+                                  // 通常時はエディタに挿入（onMouseDownでフォーカス外れを防止）
+                                  handleInsertWord(e, word);
+                                }
+                              }}
+                              style={{ padding: '6px 12px', borderRadius: '20px', border: '1px solid #cbd5e0', backgroundColor: word.bgColor, color: word.textColor, cursor: 'pointer', fontWeight: 'bold', fontSize: '1rem', transition: 'transform 0.1s' }}
+                            >
+                              {word.text}
+                            </button>
+                            {isWordDeleteMode && (
+                              <div style={{ position: 'absolute', top: -5, right: -5, background: 'red', color: 'white', borderRadius: '50%', width: '18px', height: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', pointerEvents: 'none' }}>✕</div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div style={{ display: 'grid', gridTemplateColumns: isMobileView ? '1fr' : '390px 390px', gap: '20px', marginBottom: '15px', justifyContent: 'center', width: '100%' }}>
                     <div style={{ ...(createExpanded === 'q' ? expandedQStyle : {}) } as React.CSSProperties}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', alignItems: 'center' }}>
