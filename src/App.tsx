@@ -20,6 +20,14 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { Rnd } from 'react-rnd'
 
+// ★ ここから追加（本格的な辞書ベースの音節分割ライブラリ）
+// @ts-ignore
+import Hypher from 'hypher'
+// @ts-ignore
+import english from 'hyphenation.en-us'
+const h = new Hypher(english);
+// ★ ここまで
+
 import { createClient, type Session } from '@supabase/supabase-js'
 
 // ==========================================
@@ -272,14 +280,20 @@ export default function App() {
   const [isWordDeleteMode, setIsWordDeleteMode] = useState(false)
   const [newWordText, setNewWordText] = useState('') // ←追加：常時入力フォーム用
   const [dragOverWordId, setDragOverWordId] = useState<string | null>(null) // ←追加：ドラッグ＆ドロップ判定用
+  const [lastRange, setLastRange] = useState<Range | null>(null); // ←追加：カーソル位置の記憶用
+  const [isDraggingWord, setIsDraggingWord] = useState(false); // ←追加：ドラッグ中の誤クリック防止用
   
-　const [isEnglishMode, setIsEnglishMode] = useState(false)
+  const [isEnglishMode, setIsEnglishMode] = useState(false)
   const [engWord, setEngWord] = useState('')
   const [engPhonetic, setEngPhonetic] = useState('')
 
-  const handleInsertWord = (e: React.MouseEvent, word: WordItem) => {
-    e.preventDefault();
-    // 改行バグを防ぐため、inline-block と nowrap を強制し、直後にゼロ幅スペース(&#8203;)を置く
+  const handleInsertWord = (word: WordItem) => {
+    // 記憶しておいたカーソル位置を復元して挿入する
+    if (lastRange) {
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(lastRange);
+    }
     const html = `<span style="background-color: ${word.bgColor}; color: ${word.textColor}; padding: 1px 4px; border-radius: 4px; margin: 0 2px; display: inline-block; white-space: nowrap; user-select: none;" contenteditable="false">${word.text}</span>&#8203;`;
     document.execCommand('insertHTML', false, html);
   };
@@ -411,7 +425,17 @@ export default function App() {
 
   useEffect(() => { if (createExpanded === 'none') setTempCreateFontSize(fontSize); }, [createExpanded, fontSize])
   useEffect(() => {
-    const handleSelection = () => { const sel = window.getSelection(); setHasSelection(!!(sel && sel.rangeCount > 0 && !sel.isCollapsed)); };
+    const handleSelection = () => { 
+      const sel = window.getSelection(); 
+      setHasSelection(!!(sel && sel.rangeCount > 0 && !sel.isCollapsed)); 
+      if (sel && sel.rangeCount > 0) {
+        const r = sel.getRangeAt(0);
+        // エディタ内にカーソルがある時だけ位置を記憶する
+        if (questionRef.current?.contains(r.commonAncestorContainer) || answerRef.current?.contains(r.commonAncestorContainer)) {
+          setLastRange(r);
+        }
+      }
+    };
     document.addEventListener('selectionchange', handleSelection);
     return () => document.removeEventListener('selectionchange', handleSelection);
   }, []);
@@ -818,7 +842,8 @@ export default function App() {
                                     <div style={{ position: 'relative', display: 'flex', width: 'fit-content' }}>
                                       <button
                                         draggable={!isWordDeleteMode}
-                                        onDragStart={(e) => { e.dataTransfer.setData('wordId', word.id); e.stopPropagation(); }}
+                                        onDragStart={(e) => { setIsDraggingWord(true); e.dataTransfer.setData('wordId', word.id); e.stopPropagation(); }}
+                                        onDragEnd={() => { setTimeout(() => setIsDraggingWord(false), 50); }}
                                         onDrop={(e) => {
                                           e.preventDefault(); e.stopPropagation(); setDragOverWordId(null);
                                           const draggedId = e.dataTransfer.getData('wordId');
@@ -831,11 +856,9 @@ export default function App() {
                                           const targetIndex = newWords.findIndex(w => w.id === word.id);
 
                                           if (word.type === 'folder' && parentId === null) {
-                                            // ルートのフォルダに落とした場合は中に入れる
                                             draggedItem.parentId = word.id;
                                             newWords.push(draggedItem);
                                           } else {
-                                            // 単語に落とした場合、またはフォルダ内に落とした場合は並び替え（直後に割り込み）
                                             draggedItem.parentId = word.parentId;
                                             newWords.splice(targetIndex + 1, 0, draggedItem);
                                           }
@@ -853,27 +876,18 @@ export default function App() {
                                           }
                                         }}
                                         onClick={(e) => {
-                                          if (word.type === 'folder') setWordItems(wordItems.map(w => w.id === word.id ? { ...w, isOpen: !w.isOpen } : w));
-                                        }}
-                                        onMouseDown={(e) => {
-                                          if (isWordDeleteMode) {
-                                            setWordItems(wordItems.filter(w => w.id !== word.id));
-                                          } else if (word.type === 'word') {
-                                            handleInsertWord(e, word);
+                                          if (isDraggingWord) return; // ドラッグ後の誤クリックを防止
+                                          if (word.type === 'folder') {
+                                            setWordItems(wordItems.map(w => w.id === word.id ? { ...w, isOpen: !w.isOpen } : w));
+                                          } else if (!isWordDeleteMode) {
+                                            handleInsertWord(word);
                                           }
                                         }}
-                                        style={{ 
-                                          padding: '6px 12px', 
-                                          borderRadius: word.type === 'folder' ? '6px' : '20px', 
-                                          // ★ 青い補助線（ルートなら下線、フォルダ内なら右線で割り込みを表現）
-                                          borderBottom: (dragOverWordId === word.id && parentId === null) ? '3px solid #3182ce' : '1px solid #cbd5e0',
-                                          borderRight: (dragOverWordId === word.id && parentId !== null) ? '3px solid #3182ce' : '1px solid #cbd5e0',
-                                          borderTop: '1px solid #cbd5e0', borderLeft: '1px solid #cbd5e0',
-                                          backgroundColor: (dragOverWordId === word.id && word.type === 'folder' && parentId === null) ? '#ebf8ff' : word.bgColor, 
-                                          color: word.textColor, 
-                                          cursor: isWordDeleteMode ? 'pointer' : (word.type === 'folder' ? 'pointer' : 'grab'), 
-                                          fontWeight: 'bold', fontSize: '1rem', transition: 'all 0.1s', display: 'flex', alignItems: 'center', gap: '5px' 
+                                        onMouseDown={(e) => {
+                                          // ここで e.preventDefault() をしないことで、単語もドラッグ（グリップ）可能になる！
+                                          if (isWordDeleteMode) setWordItems(wordItems.filter(w => w.id !== word.id));
                                         }}
+                                        style={{ padding: '6px 12px', borderRadius: word.type === 'folder' ? '6px' : '20px', borderBottom: (dragOverWordId === word.id && parentId === null) ? '3px solid #3182ce' : '1px solid #cbd5e0', borderRight: (dragOverWordId === word.id && parentId !== null) ? '3px solid #3182ce' : '1px solid #cbd5e0', borderTop: '1px solid #cbd5e0', borderLeft: '1px solid #cbd5e0', backgroundColor: (dragOverWordId === word.id && word.type === 'folder' && parentId === null) ? '#ebf8ff' : word.bgColor, color: word.textColor, cursor: isWordDeleteMode ? 'pointer' : (word.type === 'folder' ? 'pointer' : 'grab'), fontWeight: 'bold', fontSize: '1rem', transition: 'all 0.1s', display: 'flex', alignItems: 'center', gap: '5px' }}
                                       >
                                         {word.type === 'folder' && <span>{word.isOpen ? '📂' : '📁'}</span>}
                                         {word.text}
@@ -998,8 +1012,9 @@ export default function App() {
                     // ★ 英単語モードの自動フォーマット処理
                     if (isEnglishMode && engWord.trim()) {
                       let phonetic = engPhonetic.trim();
-                      let rawWord = engWord.trim().toLowerCase();
-                      let formattedWord = rawWord;
+                      let inputWord = engWord.trim();
+                      let rawWord = inputWord.replace(/-/g, '').toLowerCase(); // API検索用（ハイフン除去）
+                      let formattedWord = inputWord; // ユーザーが入力したハイフンを優先
                       
                       // ① 発音記号が空なら無料APIから取得し、一般的なIPAに補正
                       if (!phonetic) {
@@ -1008,24 +1023,21 @@ export default function App() {
                           if (res.ok) {
                             const data = await res.json();
                             const phonetics = data[0]?.phonetics || [];
-                            // アクセント記号(ˈ)が含まれているものを優先して取得
                             let phText = phonetics.find((p: any) => p.text && p.text.includes('ˈ'))?.text 
                                       || phonetics.find((p: any) => p.text)?.text 
                                       || data[0]?.phonetic 
                                       || '';
-                            // 日本の辞書で一般的な表記に調整 (ɹ -> r, ɡ -> g)
-                            phonetic = phText.replace(/ɹ/g, 'r').replace(/ɡ/g, 'g');
+                            // 日本の辞書で一般的な表記に調整 (ɹ->r, ɡ->g, ɛ->e)
+                            phonetic = phText.replace(/ɹ/g, 'r').replace(/ɡ/g, 'g').replace(/ɛ/g, 'e');
                           }
                         } catch (e) {}
                       }
                       
-                      // ② 音節の自動区切り処理（より正確なアルゴリズム）
-                      const syllabify = (w: string) => {
-                        // 母音グループと子音のまとまりを判別する標準的な音節分解ヒューリスティック
-                        const m = w.match(/[^aeiouy]*[aeiouy]+(?:[^aeiouy]*$|[^aeiouy](?=[^aeiouy]))?/gi);
-                        return m ? m.join('-') : w;
-                      };
-                      formattedWord = syllabify(rawWord);
+                      // ② 音節の自動区切り処理（辞書ベースの本格アルゴリズム）
+                      if (!inputWord.includes('-')) {
+                        // hypherを使って辞書通りの音節配列を取得し、ハイフンで繋ぐ
+                        formattedWord = h.hyphenate(rawWord).join('-');
+                      }
                       
                       // ③ Qボックスの先頭に美しく挿入
                       const engHeader = `<div style="margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px dashed #cbd5e0; display: flex; align-items: baseline; gap: 15px;"><strong style="font-size: 1.4em; color: #2b6cb0; letter-spacing: 1px;">${formattedWord}</strong><span style="font-family: sans-serif; color: #718096; font-size: 1.1em;">${phonetic}</span></div>`;
