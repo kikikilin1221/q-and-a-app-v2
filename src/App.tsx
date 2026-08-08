@@ -296,6 +296,7 @@ export default function App() {
       const val = activeEl.value;
       const textToInsert = word.text;
       
+      // Reactのstateに強制的に反映させる処理
       const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
       nativeInputValueSetter?.call(activeEl, val.slice(0, start) + textToInsert + val.slice(end));
       activeEl.dispatchEvent(new Event('input', { bubbles: true }));
@@ -309,41 +310,12 @@ export default function App() {
 
     // ② QAボックス（contenteditable）にフォーカスがある場合の処理
     if (lastRange) {
-      // どこにフォーカスを戻すかを判定して強制フォーカス
-      let targetNode = lastRange.commonAncestorContainer;
-      if (targetNode.nodeType === 3) targetNode = targetNode.parentNode as Node;
-      if (questionRef.current?.contains(targetNode)) questionRef.current.focus();
-      else if (answerRef.current?.contains(targetNode)) answerRef.current.focus();
-
       const sel = window.getSelection();
       sel?.removeAllRanges();
       sel?.addRange(lastRange);
-
-      // ★ 修正：execCommandを使わず、DOMを直接生成して改行バグを完全に防ぐ！
-      const span = document.createElement('span');
-      span.style.backgroundColor = word.bgColor;
-      span.style.color = word.textColor;
-      span.style.padding = '1px 4px';
-      span.style.borderRadius = '4px';
-      span.style.margin = '0 2px';
-      span.textContent = word.text; // contenteditable="false"などはつけない（バグの元）
-
-      const space = document.createTextNode('\u200B'); // ゼロ幅スペース（後の入力用）
-
-      lastRange.deleteContents();
-      lastRange.insertNode(space);
-      lastRange.insertNode(span);
-
-      // カーソルをスペースの後に移動させる
-      lastRange.setStartAfter(space);
-      lastRange.setEndAfter(space);
-      sel?.removeAllRanges();
-      sel?.addRange(lastRange);
-
-      // Reactに変更を検知させる
-      if (questionRef.current?.contains(span)) questionRef.current.dispatchEvent(new Event('input', { bubbles: true }));
-      if (answerRef.current?.contains(span)) answerRef.current.dispatchEvent(new Event('input', { bubbles: true }));
     }
+    const html = `<span style="background-color: ${word.bgColor}; color: ${word.textColor}; padding: 1px 4px; border-radius: 4px; margin: 0 2px; display: inline-block; white-space: nowrap; user-select: none;" contenteditable="false">${word.text}</span>&#8203;`;
+    document.execCommand('insertHTML', false, html);
   };
 
 　// ★ ここから追加（ワード色変更・パレット用）
