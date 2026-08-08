@@ -314,8 +314,39 @@ export default function App() {
       sel?.removeAllRanges();
       sel?.addRange(lastRange);
     }
-    const html = `<span style="background-color: ${word.bgColor}; color: ${word.textColor}; padding: 1px 4px; border-radius: 4px; margin: 0 2px; display: inline; white-space: nowrap; user-select: none;" contenteditable="false">${word.text}</span>&#8203;`;
-    document.execCommand('insertHTML', false, html);
+    
+    // ▼ ここから修正（execCommandをやめて、直接DOMノードを作成して挿入する）
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0);
+      range.deleteContents();
+      
+      // 挿入するワードの要素（span）を作成
+      const span = document.createElement('span');
+      span.style.backgroundColor = word.bgColor;
+      span.style.color = word.textColor;
+      span.style.padding = '1px 4px';
+      span.style.borderRadius = '4px';
+      span.style.margin = '0 2px';
+      span.contentEditable = "false"; // ユーザーが直接編集できないようにする
+      span.textContent = word.text;
+      
+      // カーソルが迷子にならないためのゼロ幅スペース（\u200B）を作成
+      const zws = document.createTextNode('\u200B');
+      
+      // Nodeを挿入（この順番で入れると DOM上は span → zws の順に並びます）
+      range.insertNode(zws);
+      range.insertNode(span);
+      
+      // カーソルをゼロ幅スペースの直後に移動させる
+      range.setStartAfter(zws);
+      range.setEndAfter(zws);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      
+      // カーソル位置を記憶し直す
+      setLastRange(range.cloneRange());
+    }
   };
 
 　// ★ ここから追加（ワード色変更・パレット用）
@@ -790,7 +821,31 @@ export default function App() {
 
                         {/* ★ ワード一覧枠（パレット） */}
                         {showWordPanel && (
-                          <div style={{ width: '100%', backgroundColor: '#f7fafc', border: '2px solid #cbd5e0', borderRadius: '8px', padding: '15px', boxSizing: 'border-box' }}>
+                          <div style={
+                            createExpanded !== 'none' ? {
+                              // ★ 拡大時のスタイル（反対側の画面全体に表示）
+                              position: 'fixed' as const,
+                              top: 0,
+                              left: (createExpanded === 'q' && !isMobileView) ? '50vw' : 0,
+                              width: isMobileView ? '100vw' : '50vw',
+                              height: '100vh',
+                              zIndex: 10001,
+                              padding: '40px',
+                              backgroundColor: '#f7fafc',
+                              boxSizing: 'border-box' as const,
+                              boxShadow: createExpanded === 'q' ? '-4px 0 15px rgba(0,0,0,0.1)' : '4px 0 15px rgba(0,0,0,0.1)'
+                            } : { 
+                              // ★ 縮小時（通常時）のスタイル
+                              width: '100%', backgroundColor: '#f7fafc', border: '2px solid #cbd5e0', borderRadius: '8px', padding: '15px', boxSizing: 'border-box' 
+                            }
+                          }>
+                            {/* ★ 拡大時は上部に閉じるボタンを表示 */}
+                            {createExpanded !== 'none' && (
+                              <div style={{ marginBottom: '15px' }}>
+                                <button onClick={() => setShowWordPanel(false)} style={btnStyle}>✖ 単語枠を閉じる</button>
+                              </div>
+                            )}
+
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
                               <strong style={{ color: '#4a5568' }}>ワード一覧（タップで挿入）</strong>
                               <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -807,8 +862,8 @@ export default function App() {
                               ↓ ここにドロップしてフォルダから出す・一番上に移動
                             </div>
 
-                            {/* ★ ワード枠の縦幅固定・スクロール設定 */}
-                            <div style={{ minHeight: '60px', maxHeight: '280px', overflowY: 'auto', padding: '10px', backgroundColor: '#fff', borderRadius: '6px', border: '1px inset #e2e8f0' }}>
+                            {/* ★ ワード枠の縦幅固定・スクロール設定（拡大時は長くする） */}
+                            <div style={{ minHeight: '60px', maxHeight: createExpanded !== 'none' ? 'calc(100vh - 180px)' : '280px', overflowY: 'auto', padding: '10px', backgroundColor: '#fff', borderRadius: '6px', border: '1px inset #e2e8f0' }}>
                               {wordItems.length === 0 && <span style={{ color: '#a0aec0', fontSize: '0.9rem', display: 'block', padding: '10px' }}>ワードがありません。上のフォームから追加してください。</span>}
                               
                               {/* ★ 無限階層＆高精度ドラッグ対応ツリー */}
@@ -932,12 +987,13 @@ export default function App() {
                             </div>
                           </div>
                         )}
+
                         {/* ワード色変更ポップアップ */}
                         {editingWordId && (() => {
                           const word = wordItems.find(w => w.id === editingWordId);
                           if (!word) return null;
                           return (
-                            <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 10001, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                            <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 10002, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                               <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '8px', width: '320px', display: 'flex', flexDirection: 'column', gap: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
                                 <h3 style={{ margin: 0, color: '#2d3748', textAlign: 'center' }}>色の変更</h3>
                                 <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center' }}>
