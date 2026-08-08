@@ -470,12 +470,56 @@ export default function App() {
           
           {!isDataLoaded && <div style={{ padding: '10px', backgroundColor: '#e2e8f0', color: '#2d3748', borderRadius: '4px', marginBottom: '15px' }}>⏳ クラウドからデータを読み込み中...</div>}
 
-          <div style={{ margin: '20px 0', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <div style={{ margin: '20px 0', display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
             <button onClick={() => setItems([...items, { id: `file-${Date.now()}`, type: 'file', name: '新規一問一答ファイル', parentId: null, cards: [] }])} style={{ ...btnStyle, backgroundColor: '#3182ce', color: 'white' }}>＋ 新規ファイル</button>
             <button onClick={() => setItems([...items, { id: `folder-${Date.now()}`, type: 'folder', name: '新規フォルダ', parentId: null, cards: [] }])} style={{ ...btnStyle, backgroundColor: '#718096', color: 'white' }}>＋ 新規フォルダ</button>
             <button onClick={() => setIsRoomDeleteMode(!isRoomDeleteMode)} style={{ ...btnStyle, backgroundColor: isRoomDeleteMode ? '#e53e3e' : '#cbd5e0', color: isRoomDeleteMode ? '#fff' : '#2d3748' }}>
               {isRoomDeleteMode ? '完了' : '🗑 削除モード'}
             </button>
+
+            {/* ★ バックアップ書き出しボタン */}
+            <button 
+              onClick={() => {
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(items, null, 2));
+                const downloadAnchor = document.createElement('a');
+                downloadAnchor.setAttribute("href", dataStr);
+                downloadAnchor.setAttribute("download", `kiokushiyo_backup_${new Date().toISOString().slice(0,10)}.json`);
+                document.body.appendChild(downloadAnchor);
+                downloadAnchor.click();
+                downloadAnchor.remove();
+              }} 
+              style={{ ...btnStyle, backgroundColor: '#38a169', color: 'white' }}
+            >
+              📥 バックアップ保存
+            </button>
+
+            {/* ★ 復元（ファイル読み込み）ボタン */}
+            <label style={{ ...btnStyle, backgroundColor: '#d69e2e', color: 'white', display: 'inline-flex', alignItems: 'center', cursor: 'pointer', margin: 0 }}>
+              📤 復元
+              <input 
+                type="file" 
+                accept=".json" 
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                      try {
+                        const parsed = JSON.parse(event.target?.result as string);
+                        if (Array.isArray(parsed) && window.confirm('現在のデータを上書きして復元しますか？')) {
+                          setItems(parsed);
+                          alert('復元が完了しました！');
+                        }
+                      } catch {
+                        alert('正しいバックアップファイル（JSON）を選択してください。');
+                      }
+                    };
+                    reader.readAsText(e.target.files[0]);
+                  }
+                  e.target.value = ''; // 同じファイルを連続で選べるようにリセット
+                }} 
+                style={{ display: 'none' }} 
+              />
+            </label>
           </div>
 
           <div onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('itemId'); setItems(items.map(item => item.id === id ? { ...item, parentId: null } : item)); setDragOverRoomId(null) }} onDragOver={(e) => e.preventDefault()} style={{ minHeight: '400px', backgroundColor: isDarkMode ? '#2d3748' : '#f7fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
