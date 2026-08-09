@@ -123,8 +123,14 @@ function RichToolbar({ hasSelection }: { hasSelection: boolean }) {
     if (command === 'doubleUnderline') {
       const sel = window.getSelection();
       if (sel && sel.rangeCount > 0) {
-        const html = `<span style="border-bottom: 3px double currentColor;">${sel.toString()}</span>`;
-        document.execCommand('insertHTML', false, html);
+        const range = sel.getRangeAt(0);
+        const span = document.createElement('span');
+        // ★ 文字の上に重なる黒の二重線（取り消し線ベース）
+        span.style.textDecoration = 'line-through double black';
+        // ★ 元のHTML構造（色や太字など）を維持したまま要素を移動させる
+        span.appendChild(range.extractContents());
+        range.insertNode(span);
+        sel.removeAllRanges();
       }
     } else { document.execCommand(command, false, value); }
   };
@@ -277,60 +283,54 @@ export default function App() {
   const [qImages, setQImages] = useState<FloatingImage[]>([])
   const [aImages, setAImages] = useState<FloatingImage[]>([])
   const [selectedImgId, setSelectedImgId] = useState<string | null>(null)
-  const [createExpanded, setCreateExpanded] = useState<'none' | 'q' | 'a' | 'both'>('none')
+  const [isExpanded, setIsExpanded] = useState(false); // ★ 全体拡大用に統合
+  const [wordPanelSide, setWordPanelSide] = useState<'right' | 'left'>('right'); // ★ 単語枠の位置用
+  
   const [stockImages, setStockImages] = useState<StockImage[]>([])
   const [tempCreateFontSize, setTempCreateFontSize] = useState<number>(16)
   const [hasSelection, setHasSelection] = useState(false)
   
   const [isDataLoaded, setIsDataLoaded] = useState(false)
 
-　// ★ ここから追加（ワード一覧枠用）
+ // ★ ここから追加（ワード一覧枠用）
   const [showWordPanel, setShowWordPanel] = useState(false)
   const [wordItems, setWordItems] = useState<WordItem[]>([])
   const [isWordDeleteMode, setIsWordDeleteMode] = useState(false)
-  const [newWordText, setNewWordText] = useState('') // ←追加：常時入力フォーム用
-  const [dragOverWordId, setDragOverWordId] = useState<string | null>(null) // ←追加：ドラッグ＆ドロップ判定用
+  const [newWordText, setNewWordText] = useState('') 
+  const [dragOverWordId, setDragOverWordId] = useState<string | null>(null) 
   const lastRangeRef = useRef<Range | null>(null);
-  const [isDraggingWord, setIsDraggingWord] = useState(false); // ←追加：ドラッグ中の誤クリック防止用
+  const [isDraggingWord, setIsDraggingWord] = useState(false); 
+  const isComposingRef = useRef(false); // ★ IME入力判定用
   
   const [isEnglishMode, setIsEnglishMode] = useState(false)
   const [engWord, setEngWord] = useState('')
   const [engPhonetic, setEngPhonetic] = useState('')
 
   const handleInsertWord = (word: WordItem) => {
-    // ① 英単語モードの入力欄（input要素）にフォーカスがある場合の処理
     const activeEl = document.activeElement as HTMLInputElement;
     if (activeEl && activeEl.tagName === 'INPUT' && activeEl.type === 'text') {
       const start = activeEl.selectionStart || 0;
       const end = activeEl.selectionEnd || 0;
       const val = activeEl.value;
       const textToInsert = word.text;
-      
-      // Reactのstateに強制的に反映させる処理
       const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
       nativeInputValueSetter?.call(activeEl, val.slice(0, start) + textToInsert + val.slice(end));
       activeEl.dispatchEvent(new Event('input', { bubbles: true }));
-      
       setTimeout(() => {
         activeEl.setSelectionRange(start + textToInsert.length, start + textToInsert.length);
         activeEl.focus();
       }, 0);
       return;
     }
-
-    // ② QAボックス（contenteditable）にフォーカスがある場合の処理
-    // ▼ ここを lastRangeRef.current に変更
     if (lastRangeRef.current) {
       const sel = window.getSelection();
       sel?.removeAllRanges();
       sel?.addRange(lastRangeRef.current);
     }
-    
     const sel = window.getSelection();
     if (sel && sel.rangeCount > 0) {
       const range = sel.getRangeAt(0);
       range.deleteContents();
-      
       const span = document.createElement('span');
       span.style.backgroundColor = word.bgColor;
       span.style.color = word.textColor;
@@ -339,7 +339,6 @@ export default function App() {
       span.style.margin = '0 2px';
       span.contentEditable = "false";
       span.textContent = word.text;
-      
       const zws = document.createTextNode('\u200B');
       range.insertNode(zws);
       range.insertNode(span);
@@ -347,40 +346,25 @@ export default function App() {
       range.setEndAfter(zws);
       sel.removeAllRanges();
       sel.addRange(range);
-      
-      // ▼ ここも lastRangeRef.current に変更
       lastRangeRef.current = range.cloneRange();
     }
   };
 
-  const getCreateExpandedStyle = (type: 'q'|'a') => {
-    const isBoth = createExpanded === 'both';
-    if (isMobileView) {
-      if (isBoth) return { position: 'fixed' as const, left: 0, width: '100vw', height: '50vh', top: type === 'q' ? 0 : '50vh', zIndex: 10000, padding: '20px', backgroundColor: '#fff', display: 'flex', flexDirection: 'column' as const, boxSizing: 'border-box' as const, color: '#2d3748', borderBottom: type === 'q' ? '2px solid #cbd5e0' : 'none' };
-      return { position: 'fixed' as const, top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 10000, padding: '40px', backgroundColor: '#fff', display: 'flex', flexDirection: 'column' as const, boxSizing: 'border-box' as const, color: '#2d3748' };
-    } else {
-      if (isBoth) return { position: 'fixed' as const, top: 0, left: type === 'q' ? 0 : '50vw', width: '50vw', height: '100vh', zIndex: 10000, padding: '40px', boxShadow: type === 'q' ? '4px 0 15px rgba(0,0,0,0.1)' : '-4px 0 15px rgba(0,0,0,0.1)', backgroundColor: '#fff', display: 'flex', flexDirection: 'column' as const, boxSizing: 'border-box' as const, color: '#2d3748', borderRight: type === 'q' ? '1px solid #cbd5e0' : 'none' };
-      return { position: 'fixed' as const, top: 0, left: type === 'q' ? 0 : '50vw', width: '50vw', height: '100vh', zIndex: 10000, padding: '40px', boxShadow: type === 'q' ? '4px 0 15px rgba(0,0,0,0.2)' : '-4px 0 15px rgba(0,0,0,0.2)', backgroundColor: '#fff', display: 'flex', flexDirection: 'column' as const, boxSizing: 'border-box' as const, color: '#2d3748' };
-    }
-  };
+  // ※ 古い getCreateExpandedStyle は不要になったため削除
 
-　// ★ ここから追加（ワード色変更・パレット用）
+ // ★ ここから追加（ワード色変更・パレット用）
   const [editingWordId, setEditingWordId] = useState<string | null>(null);
   const [savedColors, setSavedColors] = useState<{bg: string, text: string}[]>([
-    { bg: '#bee3f8', text: '#2b6cb0' }, // 初期カラー（青系）
-    { bg: '#fed7d7', text: '#c53030' }, // 初期カラー（赤系）
-    { bg: '#fefcbf', text: '#b7791f' }, // 初期カラー（黄系）
+    { bg: '#bee3f8', text: '#2b6cb0' }, { bg: '#fed7d7', text: '#c53030' }, { bg: '#fefcbf', text: '#b7791f' }, 
   ]);
   const [isColorDeleteMode, setIsColorDeleteMode] = useState(false);
   const [tempBgColor, setTempBgColor] = useState('#ffffff');
   const [tempTextColor, setTempTextColor] = useState('#000000');
-  // ★ ここまで
 
   // ★ ここから追加（隠しコマンド用）
   const [secretClicks, setSecretClicks] = useState(0);
   useEffect(() => {
     if (secretClicks > 0) {
-      // 1秒間クリックがなければ回数をリセットする
       const timer = setTimeout(() => setSecretClicks(0), 1000);
       return () => clearTimeout(timer);
     }
@@ -390,16 +374,13 @@ export default function App() {
     const newCount = secretClicks + 1;
     setSecretClicks(newCount);
     if (newCount >= 5) {
-      // 現在の全データのバイト数を計算（文字列化してBlobサイズを取得）
       const byteSize = new Blob([JSON.stringify(items)]).size;
       const mbSize = (byteSize / 1024 / 1024).toFixed(2);
       const percentage = ((Number(mbSize) / 500) * 100).toFixed(2);
-      
       alert(`📊 【開発者モード：データ使用量】\n\n現在の総データサイズ: 約 ${mbSize} MB\n（無料枠 500MB のうち 約 ${percentage}% を使用中）\n\n※ストレージ容量は0GBです。`);
       setSecretClicks(0);
     }
   };
-  // ★ ここまで追加
 
   const questionRef = useRef<HTMLDivElement>(null)
   const answerRef = useRef<HTMLDivElement>(null)
@@ -407,108 +388,79 @@ export default function App() {
   const activeFile = items.find(i => i.id === activeFileId && i.type === 'file')
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }))
 
-  // ★ テーマカラー変数の定義
   const appBgColor = isDarkMode ? '#1a202c' : '#f7fafc';
   const textColor = isDarkMode ? '#e2e8f0' : '#2d3748';
 
+  useEffect(() => { localStorage.setItem('kiokushiyo_theme', isDarkMode ? 'dark' : 'light'); }, [isDarkMode])
   useEffect(() => {
-    localStorage.setItem('kiokushiyo_theme', isDarkMode ? 'dark' : 'light');
-  }, [isDarkMode])
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session); setIsAuthLoading(false)
-    })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
-    })
+    supabase.auth.getSession().then(({ data: { session } }) => { setSession(session); setIsAuthLoading(false) })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => { setSession(session) })
     return () => subscription.unsubscribe()
   }, [])
-
   useEffect(() => {
     const fetchCloudData = async () => {
       if (!session?.user?.id) return;
       try {
         const { data, error } = await supabase.from('user_store').select('items').eq('id', session.user.id).single();
-        if (error && error.code !== 'PGRST116') console.error('読み込みエラー:', error);
         if (data && data.items) setItems(data.items);
-      } catch (err) { console.error('通信エラー:', err); } finally { setIsDataLoaded(true); }
+      } catch (err) {} finally { setIsDataLoaded(true); }
     };
     if (session) fetchCloudData();
   }, [session]);
-
   useEffect(() => {
     if (!isDataLoaded || !session?.user?.id) return;
-    const saveCloudData = async () => {
-      const { error } = await supabase.from('user_store').upsert({ id: session.user.id, items: items });
-      if (error) console.error('保存エラー:', error);
-    };
+    const saveCloudData = async () => { await supabase.from('user_store').upsert({ id: session.user.id, items: items }); };
     saveCloudData();
   }, [items, isDataLoaded, session]);
 
-　useEffect(() => {
-    const savedWords = localStorage.getItem('kiokushiyo_words');
-    if (savedWords) setWordItems(JSON.parse(savedWords));
-    const savedStock = localStorage.getItem('kiokushiyo_stock');
-    if (savedStock) setStockImages(JSON.parse(savedStock));
+ useEffect(() => {
+    const savedWords = localStorage.getItem('kiokushiyo_words'); if (savedWords) setWordItems(JSON.parse(savedWords));
+    const savedStock = localStorage.getItem('kiokushiyo_stock'); if (savedStock) setStockImages(JSON.parse(savedStock));
   }, []);
+  useEffect(() => { if (wordItems.length > 0) localStorage.setItem('kiokushiyo_words', JSON.stringify(wordItems)); }, [wordItems]);
+  useEffect(() => { if (stockImages.length > 0) localStorage.setItem('kiokushiyo_stock', JSON.stringify(stockImages)); }, [stockImages]);
 
-  useEffect(() => {
-    if (wordItems.length > 0) localStorage.setItem('kiokushiyo_words', JSON.stringify(wordItems));
-  }, [wordItems]);
-
-  useEffect(() => {
-    if (stockImages.length > 0) localStorage.setItem('kiokushiyo_stock', JSON.stringify(stockImages));
-  }, [stockImages]);
-
-  // ★ サインアップ処理
   const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthMessage('処理中...');
+    e.preventDefault(); setAuthMessage('処理中...');
     const { error } = await supabase.auth.signUp({ email, password });
-    if (error) {
-      setAuthMessage(`エラー: ${error.message}`);
-    } else {
-      setAuthMessage('確認メールを送信しました！メール内のリンクをクリックして有効化してからログインしてください。');
-      setAuthMode('login');
-    }
+    if (error) { setAuthMessage(`エラー: ${error.message}`); } else { setAuthMessage('確認メールを送信しました！'); setAuthMode('login'); }
   };
-
-  // ★ ログイン処理
   const handleSignIn = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthMessage('ログイン中...');
+    e.preventDefault(); setAuthMessage('ログイン中...');
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      setAuthMessage(`ログイン失敗: ${error.message}`);
-    } else {
-      setAuthMessage('');
-    }
+    if (error) { setAuthMessage(`ログイン失敗: ${error.message}`); } else { setAuthMessage(''); }
   };
-  const handleSignOut = async () => {
-    await supabase.auth.signOut(); setItems([]); setIsDataLoaded(false); setAuthMode('login');
-  };
+  const handleSignOut = async () => { await supabase.auth.signOut(); setItems([]); setIsDataLoaded(false); setAuthMode('login'); };
 
-  useEffect(() => { if (createExpanded === 'none') setTempCreateFontSize(fontSize); }, [createExpanded, fontSize])
-  // ▼ useEffect の handleSelection の中身を修正
+  useEffect(() => { if (!isExpanded) setTempCreateFontSize(fontSize); }, [isExpanded, fontSize])
+  
+  // ★ IME入力バグを根本から修正
   useEffect(() => {
+    const handleCompStart = () => { isComposingRef.current = true; };
+    const handleCompEnd = () => { isComposingRef.current = false; };
+    document.addEventListener('compositionstart', handleCompStart);
+    document.addEventListener('compositionend', handleCompEnd);
+
     const handleSelection = () => { 
+      if (isComposingRef.current) return; // ★ 日本語の変換中（IME入力中）は一切の処理をブロックする
+      
       const sel = window.getSelection(); 
       const hasSel = !!(sel && sel.rangeCount > 0 && !sel.isCollapsed);
-      
-      // ★ booleanが切り替わった時だけStateを更新（無駄な再描画を防ぐ）
       setHasSelection(prev => prev !== hasSel ? hasSel : prev); 
       
       if (sel && sel.rangeCount > 0) {
         const r = sel.getRangeAt(0);
         if (questionRef.current?.contains(r.commonAncestorContainer) || answerRef.current?.contains(r.commonAncestorContainer)) {
-          // ★ StateではなくRefに保存（再描画を防ぐ）
           lastRangeRef.current = r.cloneRange();
         }
       }
     };
     document.addEventListener('selectionchange', handleSelection);
-    return () => document.removeEventListener('selectionchange', handleSelection);
+    return () => {
+      document.removeEventListener('compositionstart', handleCompStart);
+      document.removeEventListener('compositionend', handleCompEnd);
+      document.removeEventListener('selectionchange', handleSelection);
+    }
   }, []);
 
   const handleImageInsertFromData = (dataUrl: string, isQuestion: boolean) => {
@@ -819,293 +771,238 @@ export default function App() {
               )}
 
               {!isTestMode && (
-                <div style={{ backgroundColor: 'white', color: '#2d3748', padding: '20px', borderRadius: '8px', marginBottom: '30px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', width: '100%', boxSizing: 'border-box' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', gap: '10px' }}>
-                    <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#4a5568' }}>{editingCardId ? 'カード編集' : '新規追加'}</h3>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem' }}><label>文字サイズ:</label><input type="range" min="5" max="32" value={fontSize} onChange={(e) => setFontSize(Number(e.target.value))} /><span>{fontSize}px</span></div>
+                <div style={
+                  isExpanded ? {
+                    position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 10000,
+                    backgroundColor: '#fff', padding: isMobileView ? '10px' : '30px', 
+                    display: 'flex', flexDirection: 'column', boxSizing: 'border-box', overflowY: 'auto'
+                  } : { 
+                    backgroundColor: 'white', color: '#2d3748', padding: '20px', borderRadius: '8px', marginBottom: '30px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', width: '100%', boxSizing: 'border-box' 
+                  }
+                }>
+                  {/* ★ 共通コントロールヘッダー (拡大ボタンと文字サイズバーを1つに統合) */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', padding: isExpanded ? '15px' : '0', backgroundColor: isExpanded ? '#edf2f7' : 'transparent', borderRadius: '8px', flexShrink: 0 }}>
+                    <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#4a5568', display: isExpanded && isMobileView ? 'none' : 'block' }}>{editingCardId ? 'カード編集' : '新規追加'}</h3>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', color: '#2d3748' }}>
+                        <label>共通文字サイズ:</label>
+                        <input type="range" min="5" max="32" value={tempCreateFontSize} onChange={(e) => setTempCreateFontSize(Number(e.target.value))} />
+                        <span>{tempCreateFontSize}px</span>
+                      </div>
+                      <button onClick={() => setIsExpanded(!isExpanded)} style={expandBtnStyleBig}>
+                        {isExpanded ? '縮小 ⤡' : '全体を拡大 ⤢'}
+                      </button>
+                    </div>
                   </div>
-                  
-                  {/* ★ ツール群を変数化（拡大時にも表示できるようにする） */}
-                  {(() => {
-                    const editorToolsJSX = (
-                      <div style={{ marginBottom: '15px', width: '100%' }}>
-                        <div style={{ display: 'flex', gap: '10px', marginBottom: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                          <RichToolbar hasSelection={hasSelection} />
-                          <button onClick={() => setShowWordPanel(!showWordPanel)} style={{ ...btnStyle, backgroundColor: showWordPanel ? '#3182ce' : '#e2e8f0', color: showWordPanel ? 'white' : '#2d3748' }}>
-                            {showWordPanel ? '単語枠を閉じる' : '🔤 単語枠を開く'}
-                          </button>
-                          <button onClick={() => setIsEnglishMode(!isEnglishMode)} style={{ ...btnStyle, backgroundColor: isEnglishMode ? '#805ad5' : '#e2e8f0', color: isEnglishMode ? 'white' : '#2d3748' }}>
-                            {isEnglishMode ? '英単語モードをオフ' : '🇺🇸 英単語モード'}
-                          </button>
-                        </div>
 
-                        {/* ★ ワード一覧枠（パレット） */}
-                        {showWordPanel && (
-                          <div style={
-                            createExpanded !== 'none' ? {
-                              // ★ 拡大時のスタイル（反対側の画面全体に表示）
-                              position: 'fixed' as const,
-                              top: 0,
-                              left: (createExpanded === 'q' && !isMobileView) ? '50vw' : 0,
-                              width: isMobileView ? '100vw' : '50vw',
-                              height: '100vh',
-                              zIndex: 10001,
-                              padding: '40px',
-                              backgroundColor: '#f7fafc',
-                              boxSizing: 'border-box' as const,
-                              boxShadow: createExpanded === 'q' ? '-4px 0 15px rgba(0,0,0,0.1)' : '4px 0 15px rgba(0,0,0,0.1)'
-                            } : { 
-                              // ★ 縮小時（通常時）のスタイル
-                              width: '100%', backgroundColor: '#f7fafc', border: '2px solid #cbd5e0', borderRadius: '8px', padding: '15px', boxSizing: 'border-box' 
-                            }
-                          }>
-                            {/* ★ 拡大時は上部に閉じるボタンを表示 */}
-                            {createExpanded !== 'none' && (
-                              <div style={{ marginBottom: '15px' }}>
-                                <button onClick={() => setShowWordPanel(false)} style={btnStyle}>✖ 単語枠を閉じる</button>
-                              </div>
-                            )}
+                  {/* ★ ツールバーと単語枠ボタン */}
+                  <div style={{ marginBottom: '15px', width: '100%', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', gap: '10px', marginBottom: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <RichToolbar hasSelection={hasSelection} />
+                      <button onClick={() => setShowWordPanel(!showWordPanel)} style={{ ...btnStyle, backgroundColor: showWordPanel ? '#3182ce' : '#e2e8f0', color: showWordPanel ? 'white' : '#2d3748' }}>
+                        {showWordPanel ? '単語枠を閉じる' : '🔤 単語枠を開く'}
+                      </button>
+                      <button onClick={() => setIsEnglishMode(!isEnglishMode)} style={{ ...btnStyle, backgroundColor: isEnglishMode ? '#805ad5' : '#e2e8f0', color: isEnglishMode ? 'white' : '#2d3748' }}>
+                        {isEnglishMode ? '英単語モードをオフ' : '🇺🇸 英単語モード'}
+                      </button>
+                    </div>
 
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
-                              <strong style={{ color: '#4a5568' }}>ワード一覧（タップで挿入）</strong>
-                              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                                <form onSubmit={(e) => { e.preventDefault(); if (newWordText.trim()) { setWordItems([...wordItems, { id: `word-${Date.now()}`, type: 'word', text: newWordText.trim(), bgColor: '#bee3f8', textColor: '#2b6cb0', parentId: null, isOpen: true }]); setNewWordText(''); } }} style={{ display: 'flex', gap: '4px' }}>
-                                  <input type="text" value={newWordText} onChange={(e) => setNewWordText(e.target.value)} placeholder="新しいワードを入力..." style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #cbd5e0', fontSize: '0.9rem', outline: 'none' }} />
-                                  <button type="submit" style={{ ...miniBtnStyle, backgroundColor: '#3182ce', color: 'white' }}>追加</button>
-                                </form>
-                                <button onClick={() => setWordItems([...wordItems, { id: `wfolder-${Date.now()}`, type: 'folder', text: '新規フォルダ', bgColor: '#edf2f7', textColor: '#2d3748', parentId: null, isOpen: true }])} style={miniBtnStyle}>📁 フォルダ</button>
-                                <button onClick={() => setIsWordDeleteMode(!isWordDeleteMode)} style={{ ...miniBtnStyle, backgroundColor: isWordDeleteMode ? '#e53e3e' : '#f7fafc', color: isWordDeleteMode ? 'white' : '#2d3748' }}>{isWordDeleteMode ? '完了' : '🗑 整理'}</button>
-                              </div>
-                            </div>
-                            
-                            <div onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverWordId(null); const draggedId = e.dataTransfer.getData('wordId'); if(!draggedId) return; const newWords = [...wordItems]; const draggedIndex = newWords.findIndex(w => w.id === draggedId); const draggedItem = newWords[draggedIndex]; newWords.splice(draggedIndex, 1); draggedItem.parentId = null; newWords.unshift(draggedItem); setWordItems(newWords); }} onDragOver={(e) => { e.preventDefault(); setDragOverWordId('root-top'); }} onDragLeave={() => setDragOverWordId(null)} style={{ padding: '8px', color: '#a0aec0', fontSize: '0.8rem', fontStyle: 'italic', borderBottom: dragOverWordId === 'root-top' ? '3px solid #3182ce' : 'none' }}>
-                              ↓ ここにドロップしてフォルダから出す・一番上に移動
-                            </div>
-
-                            {/* ★ ワード枠の縦幅固定・スクロール設定（拡大時は長くする） */}
-                            <div style={{ minHeight: '60px', maxHeight: createExpanded !== 'none' ? 'calc(100vh - 180px)' : '280px', overflowY: 'auto', padding: '10px', backgroundColor: '#fff', borderRadius: '6px', border: '1px inset #e2e8f0' }}>
-                              {wordItems.length === 0 && <span style={{ color: '#a0aec0', fontSize: '0.9rem', display: 'block', padding: '10px' }}>ワードがありません。上のフォームから追加してください。</span>}
-                              
-                              {/* ★ 無限階層＆高精度ドラッグ対応ツリー */}
-                              {(() => {
-                                const renderWordTree = (parentId: string | null) => {
-                                  const children = wordItems.filter(w => w.parentId === parentId);
-                                  if (children.length === 0 && parentId !== null) return null;
-                                  
-                                  return (
-                                    <div style={{ 
-                                      display: 'flex', 
-                                      flexDirection: parentId === null ? 'column' : 'row', 
-                                      flexWrap: parentId === null ? 'nowrap' : 'wrap', 
-                                      gap: parentId === null ? '8px' : '10px', 
-                                      width: '100%', 
-                                      padding: parentId === null ? '0' : '10px', 
-                                      backgroundColor: parentId === null ? 'transparent' : '#edf2f7', 
-                                      borderRadius: parentId === null ? '0' : '6px', 
-                                      marginTop: parentId === null ? '0' : '8px' 
-                                    }}>
-                                      {children.map(word => {
-                                        const isBlock = parentId === null || word.type === 'folder';
-                                        const isTop = dragOverWordId === `${word.id}-top`;
-                                        const isBottom = dragOverWordId === `${word.id}-bottom`;
-                                        const isLeft = dragOverWordId === `${word.id}-left`;
-                                        const isRight = dragOverWordId === `${word.id}-right`;
-                                        const isInside = dragOverWordId === `${word.id}-inside`;
-
-                                        return (
-                                        <div key={word.id} style={{ display: 'flex', flexDirection: 'column', width: isBlock ? '100%' : 'auto' }}>
-                                          <div style={{ position: 'relative', display: 'flex', width: '100%' }}>
-                                            <button
-                                              draggable={!isWordDeleteMode}
-                                              onDragStart={(e) => { setIsDraggingWord(true); e.dataTransfer.setData('wordId', word.id); e.stopPropagation(); }}
-                                              onDragEnd={() => { setTimeout(() => setIsDraggingWord(false), 50); }}
-                                              onDrop={(e) => {
-                                                e.preventDefault(); e.stopPropagation(); setDragOverWordId(null);
-                                                const draggedId = e.dataTransfer.getData('wordId');
-                                                if (!draggedId || draggedId === word.id) return;
-                                                
-                                                const newWords = [...wordItems];
-                                                const draggedIndex = newWords.findIndex(w => w.id === draggedId);
-                                                const draggedItem = newWords[draggedIndex];
-                                                newWords.splice(draggedIndex, 1);
-                                                const targetIndex = newWords.findIndex(w => w.id === word.id);
-
-                                                if (dragOverWordId === `${word.id}-inside`) {
-                                                  // 中に入れる（無限ループ防止付き）
-                                                  let currentParent: string | null = word.id;
-                                                  let isCyclic = false;
-                                                  while (currentParent) {
-                                                    if (currentParent === draggedId) { isCyclic = true; break; }
-                                                    currentParent = newWords.find(w => w.id === currentParent)?.parentId || null;
-                                                  }
-                                                  if (!isCyclic) {
-                                                    draggedItem.parentId = word.id;
-                                                    newWords.push(draggedItem);
-                                                  } else {
-                                                    newWords.splice(draggedIndex, 0, draggedItem); // 戻す
-                                                  }
-                                                } else {
-                                                  // 並び替え（前後）
-                                                  draggedItem.parentId = word.parentId;
-                                                  if (dragOverWordId === `${word.id}-top` || dragOverWordId === `${word.id}-left`) {
-                                                    newWords.splice(targetIndex, 0, draggedItem);
-                                                  } else {
-                                                    newWords.splice(targetIndex + 1, 0, draggedItem);
-                                                  }
-                                                }
-                                                setWordItems(newWords);
-                                              }}
-                                              onDragOver={(e) => { 
-                                                e.preventDefault(); e.stopPropagation(); 
-                                                const rect = e.currentTarget.getBoundingClientRect();
-                                                const y = e.clientY - rect.top;
-                                                const x = e.clientX - rect.left;
-                                                if (word.type === 'folder') {
-                                                  if (y < rect.height * 0.25) setDragOverWordId(`${word.id}-top`);
-                                                  else if (y > rect.height * 0.75) setDragOverWordId(`${word.id}-bottom`);
-                                                  else setDragOverWordId(`${word.id}-inside`);
-                                                } else {
-                                                  if (parentId === null) {
-                                                    if (y < rect.height / 2) setDragOverWordId(`${word.id}-top`);
-                                                    else setDragOverWordId(`${word.id}-bottom`);
-                                                  } else {
-                                                    if (x < rect.width / 2) setDragOverWordId(`${word.id}-left`);
-                                                    else setDragOverWordId(`${word.id}-right`);
-                                                  }
-                                                }
-                                              }}
-                                              onDragLeave={() => setDragOverWordId(null)}
-                                              onDoubleClick={(e) => { e.stopPropagation(); if (word.type === 'folder') { const newName = prompt('フォルダ名を変更', word.text); if (newName) setWordItems(wordItems.map(w => w.id === word.id ? { ...w, text: newName } : w)); } else { setTempBgColor(word.bgColor); setTempTextColor(word.textColor); setEditingWordId(word.id); } }}
-                                              onClick={(e) => { if (isDraggingWord) return; if (word.type === 'folder') { setWordItems(wordItems.map(w => w.id === word.id ? { ...w, isOpen: !w.isOpen } : w)); } else if (!isWordDeleteMode) { handleInsertWord(word); } }}
-                                              onMouseDown={(e) => { if (isWordDeleteMode) setWordItems(wordItems.filter(w => w.id !== word.id)); }}
-                                              style={{ 
-                                                width: isBlock ? '100%' : 'auto', textAlign: 'left',
-                                                padding: '6px 12px', borderRadius: word.type === 'folder' ? '6px' : '20px', 
-                                                borderTop: isTop ? '3px solid #3182ce' : '1px solid #cbd5e0',
-                                                borderBottom: isBottom ? '3px solid #3182ce' : '1px solid #cbd5e0',
-                                                borderLeft: isLeft ? '3px solid #3182ce' : '1px solid #cbd5e0',
-                                                borderRight: isRight ? '3px solid #3182ce' : '1px solid #cbd5e0',
-                                                backgroundColor: isInside ? '#ebf8ff' : word.bgColor, 
-                                                color: word.textColor, 
-                                                cursor: isWordDeleteMode ? 'pointer' : (word.type === 'folder' ? 'pointer' : 'grab'), 
-                                                fontWeight: 'bold', fontSize: '1rem', transition: 'all 0.1s', display: 'flex', alignItems: 'center', gap: '5px', boxSizing: 'border-box' 
-                                              }}
-                                            >
-                                              {word.type === 'folder' && <span>{word.isOpen ? '📂' : '📁'}</span>}
-                                              {word.text}
-                                            </button>
-                                            {isWordDeleteMode && <div style={{ position: 'absolute', top: -5, right: -5, background: 'red', color: 'white', borderRadius: '50%', width: '18px', height: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', pointerEvents: 'none', zIndex: 10 }}>✕</div>}
-                                          </div>
-                                          {word.type === 'folder' && word.isOpen && renderWordTree(word.id)}
-                                        </div>
-                                      )})}
-                                    </div>
-                                  );
-                                }
-                                return renderWordTree(null);
-                              })()}
-                            </div>
+                    {/* ★ 単語枠パネル */}
+                    {showWordPanel && (
+                      <div style={
+                        isExpanded ? {
+                          position: 'fixed' as const,
+                          top: isMobileView ? (wordPanelSide === 'right' ? '50vh' : 0) : 0,
+                          left: isMobileView ? 0 : (wordPanelSide === 'right' ? '50vw' : 0),
+                          width: isMobileView ? '100vw' : '50vw',
+                          height: isMobileView ? '50vh' : '100vh',
+                          zIndex: 10001,
+                          padding: '20px',
+                          backgroundColor: 'rgba(247, 250, 252, 0.98)',
+                          boxSizing: 'border-box' as const,
+                          borderLeft: !isMobileView && wordPanelSide === 'right' ? '3px solid #3182ce' : 'none',
+                          borderRight: !isMobileView && wordPanelSide === 'left' ? '3px solid #3182ce' : 'none',
+                          borderTop: isMobileView && wordPanelSide === 'right' ? '3px solid #3182ce' : 'none',
+                          borderBottom: isMobileView && wordPanelSide === 'left' ? '3px solid #3182ce' : 'none',
+                          boxShadow: '0 4px 15px rgba(0,0,0,0.2)'
+                        } : { 
+                          width: '100%', backgroundColor: '#f7fafc', border: '2px solid #cbd5e0', borderRadius: '8px', padding: '15px', boxSizing: 'border-box' 
+                        }
+                      }>
+                        {isExpanded && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
+                            <button onClick={() => setWordPanelSide(prev => prev === 'right' ? 'left' : 'right')} style={{...btnStyle, backgroundColor: '#ebf8ff', color: '#2b6cb0', borderColor: '#2b6cb0'}}>🔄 反対側へ移動する</button>
+                            <button onClick={() => setShowWordPanel(false)} style={btnStyle}>✖ 閉じる</button>
                           </div>
                         )}
 
-                        {/* ワード色変更ポップアップ */}
-                        {editingWordId && (() => {
-                          const word = wordItems.find(w => w.id === editingWordId);
-                          if (!word) return null;
-                          return (
-                            <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 10002, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                              <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '8px', width: '320px', display: 'flex', flexDirection: 'column', gap: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
-                                <h3 style={{ margin: 0, color: '#2d3748', textAlign: 'center' }}>色の変更</h3>
-                                <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center' }}>
-                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px' }}><span style={{ fontSize: '0.8rem', color: '#718096' }}>背景色</span><input type="color" value={tempBgColor} onChange={(e) => setTempBgColor(e.target.value)} style={{ width: '40px', height: '40px', cursor: 'pointer', border: 'none', padding: 0 }} /></div>
-                                  <span style={{ fontSize: '1.5rem', color: '#cbd5e0' }}>+</span>
-                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px' }}><span style={{ fontSize: '0.8rem', color: '#718096' }}>文字色</span><input type="color" value={tempTextColor} onChange={(e) => setTempTextColor(e.target.value)} style={{ width: '40px', height: '40px', cursor: 'pointer', border: 'none', padding: 0 }} /></div>
-                                  <span style={{ fontSize: '1.5rem', color: '#cbd5e0' }}>=</span>
-                                  <div style={{ padding: '4px 12px', borderRadius: '20px', backgroundColor: tempBgColor, color: tempTextColor, fontWeight: 'bold', border: '1px solid #e2e8f0' }}>{word.text}</div>
-                                </div>
-                                <div style={{ backgroundColor: '#f7fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                                    <span style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#4a5568' }}>選抜色（保存済み）</span>
-                                    <button onClick={() => setIsColorDeleteMode(!isColorDeleteMode)} style={{ ...miniBtnStyle, backgroundColor: isColorDeleteMode ? '#e53e3e' : '#fff', color: isColorDeleteMode ? '#fff' : '#2d3748' }}>{isColorDeleteMode ? '完了' : '整理'}</button>
-                                  </div>
-                                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                                    {savedColors.map((color, idx) => (
-                                      <div key={idx} style={{ position: 'relative' }}>
-                                        <div onClick={() => { if (isColorDeleteMode) { setSavedColors(savedColors.filter((_, i) => i !== idx)); } else { setTempBgColor(color.bg); setTempTextColor(color.text); } }} style={{ width: '32px', height: '32px', backgroundColor: color.bg, border: `2px solid ${color.text}`, borderRadius: '6px', cursor: 'pointer' }} />
-                                        {isColorDeleteMode && <div style={{ position: 'absolute', top: -6, right: -6, background: 'red', color: 'white', borderRadius: '50%', width: '16px', height: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', pointerEvents: 'none', fontWeight: 'bold' }}>✕</div>}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
+                          <strong style={{ color: '#4a5568' }}>ワード一覧（タップで挿入）</strong>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                            <form onSubmit={(e) => { e.preventDefault(); if (newWordText.trim()) { setWordItems([...wordItems, { id: `word-${Date.now()}`, type: 'word', text: newWordText.trim(), bgColor: '#bee3f8', textColor: '#2b6cb0', parentId: null, isOpen: true }]); setNewWordText(''); } }} style={{ display: 'flex', gap: '4px' }}>
+                              <input type="text" value={newWordText} onChange={(e) => setNewWordText(e.target.value)} placeholder="新しいワードを入力..." style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #cbd5e0', fontSize: '0.9rem', outline: 'none' }} />
+                              <button type="submit" style={{ ...miniBtnStyle, backgroundColor: '#3182ce', color: 'white' }}>追加</button>
+                            </form>
+                            <button onClick={() => setWordItems([...wordItems, { id: `wfolder-${Date.now()}`, type: 'folder', text: '新規フォルダ', bgColor: '#edf2f7', textColor: '#2d3748', parentId: null, isOpen: true }])} style={miniBtnStyle}>📁 フォルダ</button>
+                            <button onClick={() => setIsWordDeleteMode(!isWordDeleteMode)} style={{ ...miniBtnStyle, backgroundColor: isWordDeleteMode ? '#e53e3e' : '#f7fafc', color: isWordDeleteMode ? 'white' : '#2d3748' }}>{isWordDeleteMode ? '完了' : '🗑 整理'}</button>
+                          </div>
+                        </div>
+                        
+                        <div onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverWordId(null); const draggedId = e.dataTransfer.getData('wordId'); if(!draggedId) return; const newWords = [...wordItems]; const draggedIndex = newWords.findIndex(w => w.id === draggedId); const draggedItem = newWords[draggedIndex]; newWords.splice(draggedIndex, 1); draggedItem.parentId = null; newWords.unshift(draggedItem); setWordItems(newWords); }} onDragOver={(e) => { e.preventDefault(); setDragOverWordId('root-top'); }} onDragLeave={() => setDragOverWordId(null)} style={{ padding: '8px', color: '#a0aec0', fontSize: '0.8rem', fontStyle: 'italic', borderBottom: dragOverWordId === 'root-top' ? '3px solid #3182ce' : 'none' }}>
+                          ↓ ここにドロップしてフォルダから出す・一番上に移動
+                        </div>
+
+                        <div style={{ minHeight: '60px', maxHeight: isExpanded ? 'calc(100vh - 200px)' : '280px', overflowY: 'auto', padding: '10px', backgroundColor: '#fff', borderRadius: '6px', border: '1px inset #e2e8f0' }}>
+                          {wordItems.length === 0 && <span style={{ color: '#a0aec0', fontSize: '0.9rem', display: 'block', padding: '10px' }}>ワードがありません。上のフォームから追加してください。</span>}
+                          
+                          {(() => {
+                            const renderWordTree = (parentId: string | null) => {
+                              const children = wordItems.filter(w => w.parentId === parentId);
+                              if (children.length === 0 && parentId !== null) return null;
+                              
+                              return (
+                                <div style={{ display: 'flex', flexDirection: parentId === null ? 'column' : 'row', flexWrap: parentId === null ? 'nowrap' : 'wrap', gap: parentId === null ? '8px' : '10px', width: '100%', padding: parentId === null ? '0' : '10px', backgroundColor: parentId === null ? 'transparent' : '#edf2f7', borderRadius: parentId === null ? '0' : '6px', marginTop: parentId === null ? '0' : '8px' }}>
+                                  {children.map(word => {
+                                    const isBlock = parentId === null || word.type === 'folder';
+                                    const isTop = dragOverWordId === `${word.id}-top`;
+                                    const isBottom = dragOverWordId === `${word.id}-bottom`;
+                                    const isLeft = dragOverWordId === `${word.id}-left`;
+                                    const isRight = dragOverWordId === `${word.id}-right`;
+                                    const isInside = dragOverWordId === `${word.id}-inside`;
+
+                                    return (
+                                    <div key={word.id} style={{ display: 'flex', flexDirection: 'column', width: isBlock ? '100%' : 'auto' }}>
+                                      <div style={{ position: 'relative', display: 'flex', width: '100%' }}>
+                                        <button
+                                          draggable={!isWordDeleteMode}
+                                          onDragStart={(e) => { setIsDraggingWord(true); e.dataTransfer.setData('wordId', word.id); e.stopPropagation(); }}
+                                          onDragEnd={() => { setTimeout(() => setIsDraggingWord(false), 50); }}
+                                          onDrop={(e) => {
+                                            e.preventDefault(); e.stopPropagation(); setDragOverWordId(null);
+                                            const draggedId = e.dataTransfer.getData('wordId');
+                                            if (!draggedId || draggedId === word.id) return;
+                                            const newWords = [...wordItems]; const draggedIndex = newWords.findIndex(w => w.id === draggedId);
+                                            const draggedItem = newWords[draggedIndex]; newWords.splice(draggedIndex, 1);
+                                            const targetIndex = newWords.findIndex(w => w.id === word.id);
+                                            if (dragOverWordId === `${word.id}-inside`) {
+                                              let currentParent: string | null = word.id; let isCyclic = false;
+                                              while (currentParent) { if (currentParent === draggedId) { isCyclic = true; break; } currentParent = newWords.find(w => w.id === currentParent)?.parentId || null; }
+                                              if (!isCyclic) { draggedItem.parentId = word.id; newWords.push(draggedItem); } else { newWords.splice(draggedIndex, 0, draggedItem); }
+                                            } else {
+                                              draggedItem.parentId = word.parentId;
+                                              if (dragOverWordId === `${word.id}-top` || dragOverWordId === `${word.id}-left`) { newWords.splice(targetIndex, 0, draggedItem); } else { newWords.splice(targetIndex + 1, 0, draggedItem); }
+                                            }
+                                            setWordItems(newWords);
+                                          }}
+                                          onDragOver={(e) => { 
+                                            e.preventDefault(); e.stopPropagation(); 
+                                            const rect = e.currentTarget.getBoundingClientRect(); const y = e.clientY - rect.top; const x = e.clientX - rect.left;
+                                            if (word.type === 'folder') {
+                                              if (y < rect.height * 0.25) setDragOverWordId(`${word.id}-top`); else if (y > rect.height * 0.75) setDragOverWordId(`${word.id}-bottom`); else setDragOverWordId(`${word.id}-inside`);
+                                            } else {
+                                              if (parentId === null) { if (y < rect.height / 2) setDragOverWordId(`${word.id}-top`); else setDragOverWordId(`${word.id}-bottom`); } else { if (x < rect.width / 2) setDragOverWordId(`${word.id}-left`); else setDragOverWordId(`${word.id}-right`); }
+                                            }
+                                          }}
+                                          onDragLeave={() => setDragOverWordId(null)}
+                                          onDoubleClick={(e) => { e.stopPropagation(); if (word.type === 'folder') { const newName = prompt('フォルダ名を変更', word.text); if (newName) setWordItems(wordItems.map(w => w.id === word.id ? { ...w, text: newName } : w)); } else { setTempBgColor(word.bgColor); setTempTextColor(word.textColor); setEditingWordId(word.id); } }}
+                                          onClick={(e) => { if (isDraggingWord) return; if (word.type === 'folder') { setWordItems(wordItems.map(w => w.id === word.id ? { ...w, isOpen: !w.isOpen } : w)); } else if (!isWordDeleteMode) { handleInsertWord(word); } }}
+                                          onMouseDown={(e) => { if (isWordDeleteMode) setWordItems(wordItems.filter(w => w.id !== word.id)); }}
+                                          style={{ width: isBlock ? '100%' : 'auto', textAlign: 'left', padding: '6px 12px', borderRadius: word.type === 'folder' ? '6px' : '20px', borderTop: isTop ? '3px solid #3182ce' : '1px solid #cbd5e0', borderBottom: isBottom ? '3px solid #3182ce' : '1px solid #cbd5e0', borderLeft: isLeft ? '3px solid #3182ce' : '1px solid #cbd5e0', borderRight: isRight ? '3px solid #3182ce' : '1px solid #cbd5e0', backgroundColor: isInside ? '#ebf8ff' : word.bgColor, color: word.textColor, cursor: isWordDeleteMode ? 'pointer' : (word.type === 'folder' ? 'pointer' : 'grab'), fontWeight: 'bold', fontSize: '1rem', transition: 'all 0.1s', display: 'flex', alignItems: 'center', gap: '5px', boxSizing: 'border-box' }}
+                                        >
+                                          {word.type === 'folder' && <span>{word.isOpen ? '📂' : '📁'}</span>} {word.text}
+                                        </button>
+                                        {isWordDeleteMode && <div style={{ position: 'absolute', top: -5, right: -5, background: 'red', color: 'white', borderRadius: '50%', width: '18px', height: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', pointerEvents: 'none', zIndex: 10 }}>✕</div>}
                                       </div>
-                                    ))}
+                                      {word.type === 'folder' && word.isOpen && renderWordTree(word.id)}
+                                    </div>
+                                  )})}
+                                </div>
+                              );
+                            }
+                            return renderWordTree(null);
+                          })()}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ワード色変更ポップアップ */}
+                    {editingWordId && (() => {
+                      const word = wordItems.find(w => w.id === editingWordId);
+                      if (!word) return null;
+                      return (
+                        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 10002, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                          <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '8px', width: '320px', display: 'flex', flexDirection: 'column', gap: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+                            <h3 style={{ margin: 0, color: '#2d3748', textAlign: 'center' }}>色の変更</h3>
+                            <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px' }}><span style={{ fontSize: '0.8rem', color: '#718096' }}>背景色</span><input type="color" value={tempBgColor} onChange={(e) => setTempBgColor(e.target.value)} style={{ width: '40px', height: '40px', cursor: 'pointer', border: 'none', padding: 0 }} /></div>
+                              <span style={{ fontSize: '1.5rem', color: '#cbd5e0' }}>+</span>
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px' }}><span style={{ fontSize: '0.8rem', color: '#718096' }}>文字色</span><input type="color" value={tempTextColor} onChange={(e) => setTempTextColor(e.target.value)} style={{ width: '40px', height: '40px', cursor: 'pointer', border: 'none', padding: 0 }} /></div>
+                              <span style={{ fontSize: '1.5rem', color: '#cbd5e0' }}>=</span>
+                              <div style={{ padding: '4px 12px', borderRadius: '20px', backgroundColor: tempBgColor, color: tempTextColor, fontWeight: 'bold', border: '1px solid #e2e8f0' }}>{word.text}</div>
+                            </div>
+                            <div style={{ backgroundColor: '#f7fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                                <span style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#4a5568' }}>選抜色（保存済み）</span>
+                                <button onClick={() => setIsColorDeleteMode(!isColorDeleteMode)} style={{ ...miniBtnStyle, backgroundColor: isColorDeleteMode ? '#e53e3e' : '#fff', color: isColorDeleteMode ? '#fff' : '#2d3748' }}>{isColorDeleteMode ? '完了' : '整理'}</button>
+                              </div>
+                              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                                {savedColors.map((color, idx) => (
+                                  <div key={idx} style={{ position: 'relative' }}>
+                                    <div onClick={() => { if (isColorDeleteMode) { setSavedColors(savedColors.filter((_, i) => i !== idx)); } else { setTempBgColor(color.bg); setTempTextColor(color.text); } }} style={{ width: '32px', height: '32px', backgroundColor: color.bg, border: `2px solid ${color.text}`, borderRadius: '6px', cursor: 'pointer' }} />
+                                    {isColorDeleteMode && <div style={{ position: 'absolute', top: -6, right: -6, background: 'red', color: 'white', borderRadius: '50%', width: '16px', height: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', pointerEvents: 'none', fontWeight: 'bold' }}>✕</div>}
                                   </div>
-                                </div>
-                                <div style={{ display: 'flex', gap: '10px' }}>
-                                  <button onClick={() => { setEditingWordId(null); setIsColorDeleteMode(false); }} style={{ ...btnStyle, flex: 1 }}>キャンセル</button>
-                                  <button onClick={() => { setWordItems(wordItems.map(w => w.id === editingWordId ? { ...w, bgColor: tempBgColor, textColor: tempTextColor } : w)); if (!savedColors.find(c => c.bg === tempBgColor && c.text === tempTextColor)) { setSavedColors([...savedColors, { bg: tempBgColor, text: tempTextColor }]); } setEditingWordId(null); setIsColorDeleteMode(false); }} style={{ ...btnStyle, backgroundColor: '#3182ce', color: 'white', flex: 1, border: 'none' }}>保存して反映</button>
-                                </div>
+                                ))}
                               </div>
                             </div>
-                          );
-                        })()}
-                      </div>
-                    );
-
-                    return (
-                      <>
-                        {/* ★ 縮小時（通常時）はQ/Aボックスの上に表示 */}
-                        {createExpanded === 'none' && editorToolsJSX}
-                        
-                        <div style={{ display: 'grid', gridTemplateColumns: isMobileView ? '1fr' : '390px 390px', gap: '20px', marginBottom: '15px', justifyContent: 'center', width: '100%' }}>
-                          <div style={{ ...(createExpanded === 'q' || createExpanded === 'both' ? getCreateExpandedStyle('q') : {}) } as React.CSSProperties}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', alignItems: 'center' }}>
-                              <strong style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                                問題
-                                {(createExpanded === 'q' || createExpanded === 'both') && <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.8rem', marginLeft: '10px' }}>文字: <input type="range" min="5" max="32" value={tempCreateFontSize} onChange={(e) => setTempCreateFontSize(Number(e.target.value))} /> {tempCreateFontSize}px</div>}
-                                {createExpanded === 'q' && <button onClick={() => setCreateExpanded('both')} style={{ ...miniBtnStyle, backgroundColor: '#ebf8ff', color: '#2b6cb0' }}>＋解答も拡大</button>}
-                                <button onClick={() => setCreateExpanded(createExpanded === 'q' ? 'none' : (createExpanded === 'both' ? 'a' : 'q'))} style={expandBtnStyleBig}>{createExpanded === 'q' || createExpanded === 'both' ? '縮小 ⤡' : '拡大 ⤢'}</button>
-                              </strong>
-                              <button onClick={() => handleFloatingImageInsertBtn(true)} style={miniBtnStyle}>🖼 画像</button>
-                            </div>
-                            
-                            {/* ★ Q拡大画面のときにツールを表示 */}
-                            {(createExpanded === 'q' || createExpanded === 'both') && editorToolsJSX}
-
-                            <div style={innerInputStyle(createExpanded === 'q' || createExpanded === 'both')}>
-                              {isEnglishMode && (
-                                <div style={{ display: 'flex', gap: '10px', paddingBottom: '10px', marginBottom: '10px', borderBottom: '2px dashed #cbd5e0' }}>
-                                  {/* ▼ onFocus={() => setLastRange(null)} を onFocus={() => { lastRangeRef.current = null; }} に変更 */}
-                                  <input id="engWordInput" type="text" placeholder="英単語を入力..." value={engWord} onChange={(e) => setEngWord(e.target.value)} onFocus={() => { lastRangeRef.current = null; }} style={{ flex: 1, padding: '6px', borderRadius: '4px', border: '1px solid #a0aec0', fontSize: '1rem', outline: 'none' }} />
-                                  <input type="text" placeholder="発音記号 (自動)" value={engPhonetic} onChange={(e) => setEngPhonetic(e.target.value)} onFocus={() => { lastRangeRef.current = null; }} style={{ width: '120px', padding: '6px', borderRadius: '4px', border: '1px solid #a0aec0', backgroundColor: '#f7fafc', fontSize: '0.9rem', outline: 'none' }} />
-                                </div>
-                              )}
-                              {renderNewImages(qImages, true)}
-                              <div ref={questionRef} contentEditable className="rich-text-content" onDrop={(e) => handleDropFromStock(e, true)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, minHeight: '100px', outline: 'none', fontSize: `${createExpanded === 'q' ? tempCreateFontSize : fontSize}px`, textAlign: 'left' }} />
-                            </div>
-                          </div>
-                          
-                          <div style={{ ...(createExpanded === 'a' || createExpanded === 'both' ? getCreateExpandedStyle('a') : {}) } as React.CSSProperties}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', alignItems: 'center' }}>
-                              <strong style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                                解答
-                                {(createExpanded === 'a' || createExpanded === 'both') && <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.8rem', marginLeft: '10px' }}>文字: <input type="range" min="5" max="32" value={tempCreateFontSize} onChange={(e) => setTempCreateFontSize(Number(e.target.value))} /> {tempCreateFontSize}px</div>}
-                                {createExpanded === 'a' && <button onClick={() => setCreateExpanded('both')} style={{ ...miniBtnStyle, backgroundColor: '#fed7d7', color: '#c53030' }}>＋問題も拡大</button>}
-                                <button onClick={() => setCreateExpanded(createExpanded === 'a' ? 'none' : (createExpanded === 'both' ? 'q' : 'a'))} style={expandBtnStyleBig}>{createExpanded === 'a' || createExpanded === 'both' ? '縮小 ⤡' : '拡大 ⤢'}</button>
-                              </strong>
-                              <button onClick={() => handleFloatingImageInsertBtn(false)} style={miniBtnStyle}>🖼 画像</button>
-                            </div>
-                            
-                            {/* ★ A拡大画面のときにツールを表示 */}
-                            {createExpanded === 'a' && editorToolsJSX}
-
-                            <div style={innerInputStyle(createExpanded === 'a' || createExpanded === 'both')}>
-                              {renderNewImages(aImages, false)}
-                              <div ref={answerRef} contentEditable className="rich-text-content" onDrop={(e) => handleDropFromStock(e, false)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, minHeight: '100px', outline: 'none', fontSize: `${createExpanded === 'a' ? tempCreateFontSize : fontSize}px`, textAlign: 'left' }} />
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                              <button onClick={() => { setEditingWordId(null); setIsColorDeleteMode(false); }} style={{ ...btnStyle, flex: 1 }}>キャンセル</button>
+                              <button onClick={() => { setWordItems(wordItems.map(w => w.id === editingWordId ? { ...w, bgColor: tempBgColor, textColor: tempTextColor } : w)); if (!savedColors.find(c => c.bg === tempBgColor && c.text === tempTextColor)) { setSavedColors([...savedColors, { bg: tempBgColor, text: tempTextColor }]); } setEditingWordId(null); setIsColorDeleteMode(false); }} style={{ ...btnStyle, backgroundColor: '#3182ce', color: 'white', flex: 1, border: 'none' }}>保存して反映</button>
                             </div>
                           </div>
                         </div>
-                      </>
-                    );
-                  })()}
+                      );
+                    })()}
+                  </div>
 
-                  
+                  {/* ★ QとAのエディタ本体 (きれいに横並び/縦並びに統一) */}
+                  <div style={{ 
+                    display: 'flex', 
+                    flexDirection: isExpanded && !isMobileView ? 'row' : (isMobileView ? 'column' : 'row'), 
+                    gap: '20px', 
+                    width: '100%',
+                    flex: isExpanded ? 1 : 'none'
+                  }}>
+                    {/* Q枠 */}
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', border: '1px solid #cbd5e0', borderRadius: '6px' }}>
+                      <div style={{ padding: '10px', backgroundColor: '#ebf8ff', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #cbd5e0', borderTopLeftRadius: '6px', borderTopRightRadius: '6px' }}>
+                        <strong style={{ color: '#2b6cb0', fontSize: '1.1rem' }}>問題</strong>
+                        <button onClick={() => handleFloatingImageInsertBtn(true)} style={miniBtnStyle}>🖼 画像</button>
+                      </div>
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '10px', position: 'relative', overflowY: 'auto', minHeight: isExpanded ? '40vh' : '250px' }}>
+                        {isEnglishMode && (
+                          <div style={{ display: 'flex', gap: '10px', paddingBottom: '10px', marginBottom: '10px', borderBottom: '2px dashed #cbd5e0', flexShrink: 0 }}>
+                            <input id="engWordInput" type="text" placeholder="英単語を入力..." value={engWord} onChange={(e) => setEngWord(e.target.value)} onFocus={() => { lastRangeRef.current = null; }} style={{ flex: 1, padding: '6px', borderRadius: '4px', border: '1px solid #a0aec0', fontSize: '1rem', outline: 'none' }} />
+                            <input type="text" placeholder="発音記号 (自動)" value={engPhonetic} onChange={(e) => setEngPhonetic(e.target.value)} onFocus={() => { lastRangeRef.current = null; }} style={{ width: '120px', padding: '6px', borderRadius: '4px', border: '1px solid #a0aec0', backgroundColor: '#f7fafc', fontSize: '0.9rem', outline: 'none' }} />
+                          </div>
+                        )}
+                        {renderNewImages(qImages, true)}
+                        <div ref={questionRef} contentEditable className="rich-text-content" onDrop={(e) => handleDropFromStock(e, true)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre-wrap' }} />
+                      </div>
+                    </div>
+                    
+                    {/* A枠 */}
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', border: '1px solid #cbd5e0', borderRadius: '6px' }}>
+                      <div style={{ padding: '10px', backgroundColor: '#fff5f5', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #cbd5e0', borderTopLeftRadius: '6px', borderTopRightRadius: '6px' }}>
+                        <strong style={{ color: '#c53030', fontSize: '1.1rem' }}>解答</strong>
+                        <button onClick={() => handleFloatingImageInsertBtn(false)} style={miniBtnStyle}>🖼 画像</button>
+                      </div>
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '10px', position: 'relative', overflowY: 'auto', minHeight: isExpanded ? '40vh' : '250px' }}>
+                        {renderNewImages(aImages, false)}
+                        <div ref={answerRef} contentEditable className="rich-text-content" onDrop={(e) => handleDropFromStock(e, false)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre-wrap' }} />
+                      </div>
+                    </div>
+                  </div>
+
                   <button onClick={async () => {
                     let qHTML = questionRef.current?.innerHTML || ''; 
                     const aHTML = answerRef.current?.innerHTML || '';
@@ -1118,7 +1015,6 @@ export default function App() {
                       let formattedWord = inputWord; 
                       
                       if (!inputWord.includes('-') || !phonetic) {
-                        // ① 超高精度: Wiktionary API から直接「発音」と「音節」を抽出
                         try {
                           const wikRes = await fetch(`https://en.wiktionary.org/api/rest_v1/page/html/${rawWord}`);
                           if (wikRes.ok) {
@@ -1128,7 +1024,6 @@ export default function App() {
                               if (ipaMatch) phonetic = ipaMatch[1];
                             }
                             if (!inputWord.includes('-')) {
-                              // 音節マーカー(‧)を抽出してハイフンに変換
                               const hyphMatch = html.match(/Hyphenation:.*?<span[^>]*>((?:[^<]+|<!--.*?-->)+)<\/span>/is);
                               if (hyphMatch) {
                                 let wiktHyph = hyphMatch[1].replace(/<!--.*?-->/g, '').replace(/<[^>]+>/g, '').trim();
@@ -1140,7 +1035,6 @@ export default function App() {
                           }
                         } catch (e) {}
 
-                        // ② フォールバック: 発音が無ければ既存APIで補完
                         if (!phonetic) {
                           try {
                             const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${rawWord}`);
@@ -1155,10 +1049,8 @@ export default function App() {
                           } catch (e) {}
                         }
 
-                        // ③ フォールバック: 音節が無ければ hypher + 独自補正ルール
                         if (!formattedWord.includes('-')) {
                           let hyphStr = h.hyphenate(rawWord).join('-');
-                          // hypher特有の変な区切り(ity)を強制補正 (例: fa-cil-ity -> fa-cil-i-ty)
                           hyphStr = hyphStr.replace(/([bcdfghjklmnpqrstvwxyz])-?ity\b/gi, "$1-i-ty");
                           formattedWord = hyphStr;
                         }
@@ -1172,11 +1064,10 @@ export default function App() {
                     }
 
                     if (!qHTML.trim() && !aHTML.trim() && qImages.length === 0 && aImages.length === 0) return alert('入力してください。')
-                    if (editingCardId) { setItems(items.map(i => i.id === activeFileId ? { ...i, cards: i.cards.map(c => c.id === editingCardId ? { ...c, question: qHTML, answer: aHTML, qImages: [...qImages], aImages: [...aImages], fontSize } : c) } : i)); setEditingCardId(null); }
+                    if (editingCardId) { setItems(items.map(i => i.id === activeFileId ? { ...i, cards: i.cards.map(c => c.id === editingCardId ? { ...c, question: qHTML, answer: aHTML, qImages: [...qImages], aImages: [...aImages], fontSize } : c) } : i)); setEditingCardId(null); setIsExpanded(false); }
                     else { const newCard: Card = { id: Date.now().toString(), question: qHTML, answer: aHTML, qImages: [...qImages], aImages: [...aImages], fontSize }; setItems(items.map(i => i.id === activeFileId ? { ...i, cards: [...i.cards, newCard] } : i)) }
                     if (questionRef.current) questionRef.current.innerHTML = ''; if (answerRef.current) answerRef.current.innerHTML = ''; setQImages([]); setAImages([])
-                  }} style={{ ...btnStyle, backgroundColor: editingCardId ? '#d69e2e' : '#3182ce', color: 'white', width: '100%', padding: '10px' }}>{editingCardId ? '更新する' : 'カードを追加'}</button>
-                  {createExpanded !== 'none' && <div onClick={() => setCreateExpanded('none')} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)', zIndex: 9998 }} />}
+                  }} style={{ ...btnStyle, backgroundColor: editingCardId ? '#d69e2e' : '#3182ce', color: 'white', width: '100%', padding: '10px', marginTop: '15px' }}>{editingCardId ? '更新する' : 'カードを追加'}</button>
                 </div>
               )}
 
