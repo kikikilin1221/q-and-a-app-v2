@@ -505,12 +505,20 @@ export default function App() {
   return (
     <div style={{ backgroundColor: appBgColor, color: textColor, minHeight: '100vh', padding: '1px', transition: 'background-color 0.3s' }}>
       
-      {/* ★ 丸ゴシック体の読み込みとBGM設定を追加、およびリッチテキスト内の文字サイズ強制上書き */}
+      {/* ★ 丸ゴシック体の読み込みとBGM設定を追加、およびリッチテキスト内の文字サイズ・フォント強制上書き */}
       <style>
         {`
           @import url('https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@900&display=swap');
+          
+          /* QAボックス（エディタ・カード表示）自体のフォントをUDデジタル教科書体に指定 */
+          .rich-text-content {
+            font-family: "UD デジタル 教科書体 N-R", "UD デジタル 教科書体 NP-R", "UD Digital Kyokasho-tai", "UD Digital Kyokasho-tai N-R", sans-serif !important;
+          }
+
+          /* QAボックス内部の要素（spanなど）にも文字サイズとフォント設定を強制適用 */
           .rich-text-content * {
             font-size: inherit !important;
+            font-family: inherit !important;
           }
         `}
       </style>
