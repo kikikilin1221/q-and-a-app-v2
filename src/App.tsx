@@ -4,7 +4,6 @@ import 'katex/dist/katex.min.css'
 import {
   DndContext,
   closestCenter,
-  KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors
@@ -13,7 +12,6 @@ import type { DragEndEvent } from '@dnd-kit/core'
 import {
   arrayMove,
   SortableContext,
-  sortableKeyboardCoordinates,
   verticalListSortingStrategy,
   useSortable
 } from '@dnd-kit/sortable'
@@ -117,7 +115,7 @@ function TimerStopwatch() {
   )
 }
 
-function RichToolbar({ hasSelection = false }: { hasSelection?: boolean }) {
+function RichToolbar() {
   const handleFormat = (e: React.MouseEvent, command: string, value?: string) => {
     e.preventDefault();
     if (command === 'doubleUnderline') {
@@ -135,7 +133,7 @@ function RichToolbar({ hasSelection = false }: { hasSelection?: boolean }) {
     } else { document.execCommand(command, false, value); }
   };
   return (
-    <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', opacity: hasSelection ? 1 : 0.4, pointerEvents: hasSelection ? 'auto' : 'none', alignItems: 'center', backgroundColor: '#f7fafc', padding: '6px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+    <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', opacity: 1, pointerEvents: 'auto', alignItems: 'center', backgroundColor: '#f7fafc', padding: '6px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
       <button onMouseDown={(e) => handleFormat(e, 'bold')} style={miniBtnStyle}>太字</button>
       <button onMouseDown={(e) => handleFormat(e, 'doubleUnderline')} style={miniBtnStyle}>二重線</button>
       <div style={{ display: 'flex', gap: '4px', alignItems: 'center', marginLeft: '10px' }}>
@@ -371,7 +369,8 @@ export default function App() {
   const answerRef = useRef<HTMLDivElement>(null)
   
   const activeFile = items.find(i => i.id === activeFileId && i.type === 'file')
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }))
+  // 日本語IMEの変換（スペースキー）と確定（エンターキー）を阻害する KeyboardSensor を削除
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
   const appBgColor = isDarkMode ? '#1a202c' : '#f7fafc';
   const textColor = isDarkMode ? '#e2e8f0' : '#2d3748';
@@ -953,7 +952,7 @@ export default function App() {
                           </div>
                         )}
                         {renderNewImages(qImages, true)}
-                        <div ref={questionRef} contentEditable onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, true)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre-wrap' }} />
+                        <div ref={questionRef} contentEditable onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, true)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre-wrap', color: '#000000' }} />
                       </div>
                     </div>
                     
@@ -965,7 +964,7 @@ export default function App() {
                       </div>
                       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '10px', position: 'relative', overflowY: 'auto', minHeight: isExpanded ? '40vh' : '250px' }}>
                         {renderNewImages(aImages, false)}
-                        <div ref={answerRef} contentEditable onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, false)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre-wrap' }} />
+                        <div ref={answerRef} contentEditable onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, false)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre-wrap', color: '#000000' }} />
                       </div>
                     </div>
                   </div>
