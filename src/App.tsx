@@ -149,95 +149,82 @@ function RichToolbar({ hasSelection }: { hasSelection: boolean }) {
 
 function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onUpdate, onEdit, fontSize, isMobileView }: { card: Card, index: number, isTestMode: boolean, isEditMode: boolean, onDelete: (id: string) => void, onUpdate: (c: Card) => void, onEdit: (c: Card) => void, fontSize: number, isMobileView: boolean }) {
   const { attributes, listeners, setNodeRef, transform, transition, isOver } = useSortable({ id: card.id })
-  const [expanded, setExpanded] = useState<'none' | 'q' | 'a' | 'both'>('none')
+  const [isCardExpanded, setIsCardExpanded] = useState(false)
   const [revealed, setRevealed] = useState(false)
   const [tempFontSize, setTempFontSize] = useState<number>(card.fontSize || 16)
 
   useEffect(() => { setRevealed(!isTestMode) }, [isTestMode])
-  useEffect(() => { if (expanded === 'none') setTempFontSize(card.fontSize || 16) }, [expanded, card.fontSize])
+  useEffect(() => { if (!isCardExpanded) setTempFontSize(card.fontSize || 16) }, [isCardExpanded, card.fontSize])
 
-  const style = { transform: expanded !== 'none' ? 'none' : CSS.Transform.toString(transform), transition: expanded !== 'none' ? 'none' : transition, border: isOver ? '3px dashed #3182ce' : '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', backgroundColor: '#ffffff', boxShadow: isOver ? '0 4px 12px rgba(49, 130, 206, 0.3)' : '0 2px 4px rgba(0,0,0,0.05)', position: 'relative' as const, zIndex: expanded !== 'none' ? 9999 : 1, color: '#2d3748', ...((isMobileView && !isEditMode) ? { flex: '0 0 100%', scrollSnapAlign: 'center', boxSizing: 'border-box' as const, minWidth: '0' } : {}) }
-  const togglePin = (imgId: string, isQ: boolean) => {
-    const newCard = { ...card };
-    if (isQ) newCard.qImages = newCard.qImages.map(img => img.id === imgId ? { ...img, pinned: !img.pinned } : img);
-    else newCard.aImages = newCard.aImages.map(img => img.id === imgId ? { ...img, pinned: !img.pinned } : img);
-    onUpdate(newCard);
-  }
-  const renderImages = (images: FloatingImage[], isQ: boolean) => {
+  const baseStyle = { transform: isCardExpanded ? 'none' : CSS.Transform.toString(transform), transition: isCardExpanded ? 'none' : transition, border: isOver ? '3px dashed #3182ce' : '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', backgroundColor: '#ffffff', boxShadow: isOver ? '0 4px 12px rgba(49, 130, 206, 0.3)' : '0 2px 4px rgba(0,0,0,0.05)', position: 'relative' as const, zIndex: isCardExpanded ? 10000 : 1, color: '#2d3748', ...((isMobileView && !isEditMode) ? { flex: '0 0 100%', scrollSnapAlign: 'center', boxSizing: 'border-box' as const, minWidth: '0' } : {}) }
+  const cardContainerStyle = isCardExpanded ? { position: 'fixed' as const, top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 10000, backgroundColor: '#fff', padding: isMobileView ? '10px' : '30px', display: 'flex', flexDirection: 'column' as const, boxSizing: 'border-box' as const, overflowY: 'auto' as const } : baseStyle;
+
+  const renderImages = (images: FloatingImage[]) => {
     return (
-      <>
-        {images.map(img => (
-          <div key={img.id} style={{ position: 'absolute', left: img.x, top: img.y, width: img.width, height: img.height, zIndex: 10 }}>
-            {isEditMode && (
-              <button onClick={(e) => { e.stopPropagation(); togglePin(img.id, isQ) }} style={{ position: 'absolute', top: -25, right: 0, ...miniBtnStyle }}>
-                {img.pinned ? '動かす' : '固定'}
-              </button>
-            )}
-            <img src={img.src} style={{ width: '100%', height: '100%', borderRadius: '4px', pointerEvents: 'none' }} alt="" />
-          </div>
-        ))}
-      </>
+      <>{images.map(img => (
+        <div key={img.id} style={{ position: 'absolute', left: img.x, top: img.y, width: img.width, height: img.height, zIndex: 10 }}>
+          <img src={img.src} style={{ width: '100%', height: '100%', borderRadius: '4px', pointerEvents: 'none' }} alt="" />
+        </div>
+      ))}</>
     )
   }
 
-  const baseBoxStyle = { fontFamily: 'sans-serif', position: 'relative' as const, height: '250px', width: '100%', minWidth: '0', maxWidth: '100%', border: '1px solid #e2e8f0', /* ...以下略 */ }
-  const expandedStyle = (type: 'q'|'a') => {
-    const isBoth = expanded === 'both';
-    if (isMobileView) {
-      if (isBoth) return { position: 'fixed' as const, left: 0, width: '100vw', height: '50vh', top: type === 'q' ? 0 : '50vh', zIndex: 10000, padding: '20px', backgroundColor: '#fff', display: 'flex', flexDirection: 'column' as const, boxSizing: 'border-box' as const, color: '#2d3748', borderBottom: type === 'q' ? '2px solid #cbd5e0' : 'none' };
-      return { position: 'fixed' as const, top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 10000, padding: '40px', backgroundColor: '#fff', display: 'flex', flexDirection: 'column' as const, boxSizing: 'border-box' as const, color: '#2d3748' };
-    } else {
-      if (isBoth) return { position: 'fixed' as const, top: 0, left: type === 'q' ? 0 : '50vw', width: '50vw', height: '100vh', zIndex: 10000, padding: '40px', boxShadow: type === 'q' ? '4px 0 15px rgba(0,0,0,0.1)' : '-4px 0 15px rgba(0,0,0,0.1)', backgroundColor: '#fff', display: 'flex', flexDirection: 'column' as const, boxSizing: 'border-box' as const, color: '#2d3748', borderRight: type === 'q' ? '1px solid #cbd5e0' : 'none' };
-      return { position: 'fixed' as const, top: 0, left: type === 'q' ? 0 : '50vw', width: '50vw', height: '100vh', zIndex: 10000, padding: '40px', boxShadow: type === 'q' ? '4px 0 15px rgba(0,0,0,0.2)' : '-4px 0 15px rgba(0,0,0,0.2)', backgroundColor: '#fff', display: 'flex', flexDirection: 'column' as const, boxSizing: 'border-box' as const, color: '#2d3748' };
-    }
-  }
-  const innerContentStyle = (isExpanded: boolean) => ({ ...(isExpanded ? { flex: 1, height: '100%', width: '100%', border: '1px solid #e2e8f0', padding: '10px', overflowX: 'auto' as const, overflowY: 'auto' as const, position: 'relative' as const, textAlign: 'left' as const, whiteSpace: 'pre' as const, boxSizing: 'border-box' as const, fontSize: `${tempFontSize}px`, color: '#2d3748', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column' } : baseBoxStyle) } as React.CSSProperties)
-
   return (
-    <div ref={setNodeRef} style={style}>
-      {isEditMode && (
+    <div ref={setNodeRef} style={cardContainerStyle}>
+      {isEditMode && !isCardExpanded && (
         <div {...attributes} {...listeners} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', borderBottom: '1px solid #eee', paddingBottom: '8px', cursor: 'grab' }}>
           <span style={{ fontSize: '0.85rem', color: '#666', fontWeight: 'bold' }}>⠿ ここをドラッグして並び替え</span>
           <button onClick={() => onDelete(card.id)} style={{ color: '#e53e3e', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold' }}>削除</button>
         </div>
       )}
-      {/* ★ カード内はスマホ時も縦にQとAを並べる (1frで全幅) */}
-      <div style={{ display: 'grid', gridTemplateColumns: isMobileView ? '1fr' : '390px 390px', gap: '20px', justifyContent: 'center', width: '100%' }}>
-        {/* Qのコンテナ */}
-        <div style={{ ...(expanded === 'q' || expanded === 'both' ? expandedStyle('q') : {}) }}>
-          <strong style={{ color: '#2b6cb0', display: 'flex', justifyContent: 'space-between', marginBottom: '8px', alignItems: 'center' }}>
-            <span style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>Q{index}: 問題{!isTestMode && <button onClick={() => onEdit(card)} style={{ ...miniBtnStyle, backgroundColor: '#bee3f8', color: '#2b6cb0' }}>編集する</button>}</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              {(expanded === 'q' || expanded === 'both') && <div style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '5px', color: '#2d3748' }}>一時拡大文字: <input type="range" min="5" max="32" value={tempFontSize} onChange={(e) => setTempFontSize(Number(e.target.value))} /> {tempFontSize}px</div>}
-              {expanded === 'q' && <button onClick={(e) => { e.stopPropagation(); setExpanded('both'); }} style={{ ...miniBtnStyle, backgroundColor: '#ebf8ff', color: '#2b6cb0' }}>＋解答も拡大</button>}
-              <button onClick={() => setExpanded(expanded === 'q' ? 'none' : (expanded === 'both' ? 'a' : 'q'))} style={expandBtnStyleBig}>{expanded === 'q' || expanded === 'both' ? '縮小 ⤡' : '拡大 ⤢'}</button>
-            </div>
-          </strong>
-          <div style={innerContentStyle(expanded === 'q' || expanded === 'both')}>
-            {renderImages(card.qImages, true)}
-            <div dangerouslySetInnerHTML={{ __html: renderLatex(card.question) }} className="rich-text-content" style={{ flex: 1, textAlign: 'left' }} />
+
+      {/* ★ 統合された共通コントロールヘッダー */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', padding: isCardExpanded ? '15px' : '5px', backgroundColor: isCardExpanded ? '#edf2f7' : 'transparent', borderRadius: '8px', flexShrink: 0 }}>
+        <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#4a5568', display: isCardExpanded && isMobileView ? 'none' : 'block' }}>
+          {isCardExpanded ? `Q${index}` : ''}
+        </h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap', marginLeft: 'auto' }}>
+          {!isTestMode && <button onClick={() => onEdit(card)} style={{ ...miniBtnStyle, backgroundColor: '#bee3f8', color: '#2b6cb0' }}>編集する</button>}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', color: '#2d3748' }}>
+            <label>文字サイズ:</label>
+            <input type="range" min="5" max="32" value={tempFontSize} onChange={(e) => setTempFontSize(Number(e.target.value))} />
+            <span>{tempFontSize}px</span>
+          </div>
+          <button onClick={() => setIsCardExpanded(!isCardExpanded)} style={expandBtnStyleBig}>
+            {isCardExpanded ? '縮小 ⤡' : '全体を拡大 ⤢'}
+          </button>
+        </div>
+      </div>
+
+      {/* ★ QA本体 (拡大時は作成画面と同じレイアウト) */}
+      <div style={{ display: isCardExpanded ? 'flex' : 'grid', gridTemplateColumns: !isCardExpanded ? (isMobileView ? '1fr' : '390px 390px') : undefined, flexDirection: isCardExpanded && !isMobileView ? 'row' : (isMobileView ? 'column' : 'row'), gap: '20px', justifyContent: 'center', width: '100%', flex: isCardExpanded ? 1 : 'none' }}>
+        
+        {/* Q枠 */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', border: '1px solid #cbd5e0', borderRadius: '6px', height: isCardExpanded ? 'auto' : '250px' }}>
+          <div style={{ padding: '8px 12px', backgroundColor: '#ebf8ff', borderBottom: '1px solid #cbd5e0', borderTopLeftRadius: '6px', borderTopRightRadius: '6px' }}>
+            <strong style={{ color: '#2b6cb0', fontSize: '1rem' }}>問題</strong>
+          </div>
+          <div style={{ flex: 1, padding: '10px', position: 'relative', overflowY: 'auto', fontSize: `${tempFontSize}px`, color: '#2d3748', textAlign: 'left', whiteSpace: 'pre-wrap' }}>
+            {renderImages(card.qImages)}
+            <div dangerouslySetInnerHTML={{ __html: renderLatex(card.question) }} className="rich-text-content" />
           </div>
         </div>
-        {/* Aのコンテナ */}
-        <div style={{ ...(expanded === 'a' || expanded === 'both' ? expandedStyle('a') : {}) }} onClick={() => { if (isTestMode) setRevealed(!revealed) }}>
-          <strong style={{ color: '#c53030', display: 'flex', justifyContent: 'space-between', marginBottom: '8px', alignItems: 'center' }}>
-            <span>A{index}: 解答 {isTestMode && <span style={{fontSize: '0.8rem', color: '#e53e3e', marginLeft: '10px'}}>(クリックで表示)</span>}</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              {(expanded === 'a' || expanded === 'both') && <div style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '5px', color: '#2d3748' }}>一時拡大文字: <input type="range" min="5" max="32" value={tempFontSize} onChange={(e) => setTempFontSize(Number(e.target.value))} /> {tempFontSize}px</div>}
-              {expanded === 'a' && <button onClick={(e) => { e.stopPropagation(); setExpanded('both'); }} style={{ ...miniBtnStyle, backgroundColor: '#fed7d7', color: '#c53030' }}>＋問題も拡大</button>}
-              <button onClick={(e) => { e.stopPropagation(); setExpanded(expanded === 'a' ? 'none' : (expanded === 'both' ? 'q' : 'a')); }} style={expandBtnStyleBig}>{expanded === 'a' || expanded === 'both' ? '縮小 ⤡' : '拡大 ⤢'}</button>
-            </div>
-          </strong>
-          <div style={{ ...innerContentStyle(expanded === 'a' || expanded === 'both'), cursor: isTestMode ? 'pointer' : 'default' }}>
-            <div style={{ opacity: (!revealed) ? 0 : 1, transition: 'opacity 0.2s', height: '100%', display: 'flex', flexDirection: 'column' }}>
-              {renderImages(card.aImages, false)}
-              <div dangerouslySetInnerHTML={{ __html: renderLatex(card.answer) }} className="rich-text-content" style={{ flex: 1, textAlign: 'left' }} />
+        
+        {/* A枠 */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', border: '1px solid #cbd5e0', borderRadius: '6px', height: isCardExpanded ? 'auto' : '250px', cursor: isTestMode ? 'pointer' : 'default' }} onClick={() => { if (isTestMode) setRevealed(!revealed) }}>
+          <div style={{ padding: '8px 12px', backgroundColor: '#fff5f5', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #cbd5e0', borderTopLeftRadius: '6px', borderTopRightRadius: '6px' }}>
+            <strong style={{ color: '#c53030', fontSize: '1rem' }}>解答 {isTestMode && <span style={{fontSize: '0.8rem', color: '#e53e3e', marginLeft: '10px'}}>(クリックで表示)</span>}</strong>
+          </div>
+          <div style={{ flex: 1, padding: '10px', position: 'relative', overflowY: 'auto', fontSize: `${tempFontSize}px`, color: '#2d3748', textAlign: 'left', whiteSpace: 'pre-wrap' }}>
+            <div style={{ opacity: (!revealed) ? 0 : 1, transition: 'opacity 0.2s', height: '100%' }}>
+              {renderImages(card.aImages)}
+              <div dangerouslySetInnerHTML={{ __html: renderLatex(card.answer) }} className="rich-text-content" />
             </div>
             {!revealed && <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', fontWeight: 'bold', color: '#a0aec0' }}>クリックで解答を表示</div>}
           </div>
         </div>
+
       </div>
-      {expanded !== 'none' && <div onClick={() => setExpanded('none')} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)', zIndex: 9998 }} />}
     </div>
   )
 }
@@ -288,7 +275,6 @@ export default function App() {
   
   const [stockImages, setStockImages] = useState<StockImage[]>([])
   const [tempCreateFontSize, setTempCreateFontSize] = useState<number>(16)
-  const [hasSelection, setHasSelection] = useState(false)
   
   const [isDataLoaded, setIsDataLoaded] = useState(false)
 
@@ -299,8 +285,7 @@ export default function App() {
   const [newWordText, setNewWordText] = useState('') 
   const [dragOverWordId, setDragOverWordId] = useState<string | null>(null) 
   const lastRangeRef = useRef<Range | null>(null);
-  const [isDraggingWord, setIsDraggingWord] = useState(false); 
-  const isComposingRef = useRef(false); // ★ IME入力判定用
+  const [isDraggingWord, setIsDraggingWord] = useState(false);
   
   const [isEnglishMode, setIsEnglishMode] = useState(false)
   const [engWord, setEngWord] = useState('')
@@ -433,35 +418,17 @@ export default function App() {
   const handleSignOut = async () => { await supabase.auth.signOut(); setItems([]); setIsDataLoaded(false); setAuthMode('login'); };
 
   useEffect(() => { if (!isExpanded) setTempCreateFontSize(fontSize); }, [isExpanded, fontSize])
-  
-  // ★ IME入力バグを根本から修正
-  useEffect(() => {
-    const handleCompStart = () => { isComposingRef.current = true; };
-    const handleCompEnd = () => { isComposingRef.current = false; };
-    document.addEventListener('compositionstart', handleCompStart);
-    document.addEventListener('compositionend', handleCompEnd);
 
-    const handleSelection = () => { 
-      if (isComposingRef.current) return; // ★ 日本語の変換中（IME入力中）は一切の処理をブロックする
-      
-      const sel = window.getSelection(); 
-      const hasSel = !!(sel && sel.rangeCount > 0 && !sel.isCollapsed);
-      setHasSelection(prev => prev !== hasSel ? hasSel : prev); 
-      
-      if (sel && sel.rangeCount > 0) {
-        const r = sel.getRangeAt(0);
-        if (questionRef.current?.contains(r.commonAncestorContainer) || answerRef.current?.contains(r.commonAncestorContainer)) {
-          lastRangeRef.current = r.cloneRange();
-        }
+  // ★ クリック時とキーボード入力時のみ静かにカーソル位置を記憶（再描画なし）
+  const saveCursorPosition = () => {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      const r = sel.getRangeAt(0);
+      if (questionRef.current?.contains(r.commonAncestorContainer) || answerRef.current?.contains(r.commonAncestorContainer)) {
+        lastRangeRef.current = r.cloneRange();
       }
-    };
-    document.addEventListener('selectionchange', handleSelection);
-    return () => {
-      document.removeEventListener('compositionstart', handleCompStart);
-      document.removeEventListener('compositionend', handleCompEnd);
-      document.removeEventListener('selectionchange', handleSelection);
     }
-  }, []);
+  };
 
   const handleImageInsertFromData = (dataUrl: string, isQuestion: boolean) => {
     const img = new Image(); img.onload = () => {
@@ -798,7 +765,7 @@ export default function App() {
                   {/* ★ ツールバーと単語枠ボタン */}
                   <div style={{ marginBottom: '15px', width: '100%', flexShrink: 0 }}>
                     <div style={{ display: 'flex', gap: '10px', marginBottom: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                      <RichToolbar hasSelection={hasSelection} />
+                      <RichToolbar />
                       <button onClick={() => setShowWordPanel(!showWordPanel)} style={{ ...btnStyle, backgroundColor: showWordPanel ? '#3182ce' : '#e2e8f0', color: showWordPanel ? 'white' : '#2d3748' }}>
                         {showWordPanel ? '単語枠を閉じる' : '🔤 単語枠を開く'}
                       </button>
@@ -986,7 +953,7 @@ export default function App() {
                           </div>
                         )}
                         {renderNewImages(qImages, true)}
-                        <div ref={questionRef} contentEditable className="rich-text-content" onDrop={(e) => handleDropFromStock(e, true)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre-wrap' }} />
+                        <div ref={questionRef} contentEditable onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, true)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre-wrap' }} />
                       </div>
                     </div>
                     
@@ -998,7 +965,7 @@ export default function App() {
                       </div>
                       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '10px', position: 'relative', overflowY: 'auto', minHeight: isExpanded ? '40vh' : '250px' }}>
                         {renderNewImages(aImages, false)}
-                        <div ref={answerRef} contentEditable className="rich-text-content" onDrop={(e) => handleDropFromStock(e, false)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre-wrap' }} />
+                        <div ref={answerRef} contentEditable onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, false)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre-wrap' }} />
                       </div>
                     </div>
                   </div>
