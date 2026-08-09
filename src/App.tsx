@@ -322,11 +322,19 @@ export default function App() {
       span.style.margin = '0 2px';
       span.contentEditable = "false";
       span.textContent = word.text;
-      const zws = document.createTextNode('\u200B');
-      range.insertNode(zws);
-      range.insertNode(span);
-      range.setStartAfter(zws);
-      range.setEndAfter(zws);
+      
+      // ★ フラグメントを使って「ゼロ幅スペース」→「単語」→「ゼロ幅スペース」の順で確実に挿入する
+      const frag = document.createDocumentFragment();
+      frag.appendChild(document.createTextNode('\u200B')); // 前のゼロ幅スペース
+      frag.appendChild(span);
+      const zwsAfter = document.createTextNode('\u200B'); // 後のゼロ幅スペース
+      frag.appendChild(zwsAfter);
+      
+      range.insertNode(frag);
+      // ★ カーソルを「後のゼロ幅スペース」の直後に置くことでIMEバグを回避
+      range.setStartAfter(zwsAfter);
+      range.collapse(true); 
+      
       sel.removeAllRanges();
       sel.addRange(range);
       lastRangeRef.current = range.cloneRange();
@@ -626,7 +634,7 @@ export default function App() {
                         backgroundColor: item.type === 'folder' ? '#edf2f7' : '#ffffff', color: '#2d3748', 
                         cursor: editingItemId === item.id ? 'text' : (item.type === 'file' ? 'pointer' : 'grab'), display: 'flex', alignItems: 'center', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', fontWeight: item.type === 'folder' ? 'bold' : 'normal', borderBottom: dragOverRoomId === item.id ? '3px solid #3182ce' : '1px solid #cbd5e0' }}>
                       <span style={{ marginRight: '8px', fontSize: '1.2rem' }}>{item.type === 'folder' ? '📁' : '📄'}</span>
-                      {editingItemId === item.id ? <input autoFocus defaultValue={item.name} onBlur={(e) => { setItems(items.map(i => i.id === item.id ? { ...i, name: e.target.value } : i)); setEditingItemId(null) }} onKeyDown={(e) => { if (e.key === 'Enter') { setItems(items.map(i => i.id === item.id ? { ...i, name: e.currentTarget.value } : i)); setEditingItemId(null) } }} onClick={(e) => e.stopPropagation()} style={{ fontSize: '1rem', padding: '4px', borderRadius: '4px', border: '2px solid #3182ce', outline: 'none', color: '#2d3748' }} /> : <span onDoubleClick={(e) => { e.stopPropagation(); setEditingItemId(item.id) }} style={{ flexGrow: 1 }}>{item.name}</span>}
+                      {editingItemId === item.id ? <input autoFocus defaultValue={item.name} onBlur={(e) => { setItems(items.map(i => i.id === item.id ? { ...i, name: e.target.value } : i)); setEditingItemId(null) }} onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; if (e.key === 'Enter') { setItems(items.map(i => i.id === item.id ? { ...i, name: e.currentTarget.value } : i)); setEditingItemId(null) } }} onClick={(e) => e.stopPropagation()} style={{ fontSize: '1rem', padding: '4px', borderRadius: '4px', border: '2px solid #3182ce', outline: 'none', color: '#2d3748' }} /> : <span onDoubleClick={(e) => { e.stopPropagation(); setEditingItemId(item.id) }} style={{ flexGrow: 1 }}>{item.name}</span>}
                       
                       {isRoomDeleteMode && (
                         <button
@@ -664,8 +672,8 @@ export default function App() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', gap: '10px', flexWrap: 'wrap' }}>
             <button onClick={() => setCurrentScreen('room')} style={{ ...btnStyle, backgroundColor: '#e2e8f0' }}>← 部屋に戻る</button>
             {editingItemId === activeFileId ? (
-              <input autoFocus defaultValue={activeFile?.name} onBlur={(e) => { setItems(items.map(i => i.id === activeFileId ? { ...i, name: e.target.value } : i)); setEditingItemId(null) }} onKeyDown={(e) => { if (e.key === 'Enter') { setItems(items.map(i => i.id === activeFileId ? { ...i, name: e.currentTarget.value } : i)); setEditingItemId(null) } }} style={{ fontSize: '1.5rem', fontWeight: 900, padding: '4px', borderRadius: '4px', border: '2px solid #3182ce', outline: 'none', maxWidth: '200px', color: '#2d3748', fontFamily: '"Zen Maru Gothic", sans-serif' }} />
-            ) : (
+  <input autoFocus defaultValue={activeFile?.name} onBlur={(e) => { setItems(items.map(i => i.id === activeFileId ? { ...i, name: e.target.value } : i)); setEditingItemId(null) }} onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; if (e.key === 'Enter') { setItems(items.map(i => i.id === activeFileId ? { ...i, name: e.currentTarget.value } : i)); setEditingItemId(null) } }} style={{ fontSize: '1.5rem', fontWeight: 900, padding: '4px', borderRadius: '4px', border: '2px solid #3182ce', outline: 'none', maxWidth: '200px', color: '#2d3748', fontFamily: '"Zen Maru Gothic", sans-serif' }} />
+) : (
               <h1 onDoubleClick={() => setEditingItemId(activeFileId)} style={{ margin: 0, fontSize: '1.8rem', cursor: 'text', wordBreak: 'break-all', color: isDarkMode ? '#ffffff' : '#2d3748', fontFamily: '"Zen Maru Gothic", sans-serif', fontWeight: 900 }} title="ダブルクリックで名前を変更">{activeFile?.name}</h1>
             )}
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
