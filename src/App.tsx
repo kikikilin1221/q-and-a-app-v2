@@ -143,7 +143,7 @@ function RichToolbar({ hasSelection }: { hasSelection: boolean }) {
 
 function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onUpdate, onEdit, fontSize, isMobileView }: { card: Card, index: number, isTestMode: boolean, isEditMode: boolean, onDelete: (id: string) => void, onUpdate: (c: Card) => void, onEdit: (c: Card) => void, fontSize: number, isMobileView: boolean }) {
   const { attributes, listeners, setNodeRef, transform, transition, isOver } = useSortable({ id: card.id })
-  const [expanded, setExpanded] = useState<'none' | 'q' | 'a'>('none')
+  const [expanded, setExpanded] = useState<'none' | 'q' | 'a' | 'both'>('none')
   const [revealed, setRevealed] = useState(false)
   const [tempFontSize, setTempFontSize] = useState<number>(card.fontSize || 16)
 
@@ -175,7 +175,16 @@ function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onUpdate,
   }
 
   const baseBoxStyle = { fontFamily: 'sans-serif', position: 'relative' as const, height: '250px', width: '100%', minWidth: '0', maxWidth: '100%', border: '1px solid #e2e8f0', /* ...以下略 */ }
-  const expandedStyle = (isRight: boolean) => ({ position: 'fixed' as const, top: 0, left: (isRight && !isMobileView) ? '50vw' : 0, width: isMobileView ? '100vw' : '50vw', height: '100vh', zIndex: 10000, padding: '40px', boxShadow: isRight ? '-4px 0 15px rgba(0,0,0,0.2)' : '4px 0 15px rgba(0,0,0,0.2)', backgroundColor: '#fff', display: 'flex', flexDirection: 'column' as const, boxSizing: 'border-box' as const, color: '#2d3748' })
+  const expandedStyle = (type: 'q'|'a') => {
+    const isBoth = expanded === 'both';
+    if (isMobileView) {
+      if (isBoth) return { position: 'fixed' as const, left: 0, width: '100vw', height: '50vh', top: type === 'q' ? 0 : '50vh', zIndex: 10000, padding: '20px', backgroundColor: '#fff', display: 'flex', flexDirection: 'column' as const, boxSizing: 'border-box' as const, color: '#2d3748', borderBottom: type === 'q' ? '2px solid #cbd5e0' : 'none' };
+      return { position: 'fixed' as const, top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 10000, padding: '40px', backgroundColor: '#fff', display: 'flex', flexDirection: 'column' as const, boxSizing: 'border-box' as const, color: '#2d3748' };
+    } else {
+      if (isBoth) return { position: 'fixed' as const, top: 0, left: type === 'q' ? 0 : '50vw', width: '50vw', height: '100vh', zIndex: 10000, padding: '40px', boxShadow: type === 'q' ? '4px 0 15px rgba(0,0,0,0.1)' : '-4px 0 15px rgba(0,0,0,0.1)', backgroundColor: '#fff', display: 'flex', flexDirection: 'column' as const, boxSizing: 'border-box' as const, color: '#2d3748', borderRight: type === 'q' ? '1px solid #cbd5e0' : 'none' };
+      return { position: 'fixed' as const, top: 0, left: type === 'q' ? 0 : '50vw', width: '50vw', height: '100vh', zIndex: 10000, padding: '40px', boxShadow: type === 'q' ? '4px 0 15px rgba(0,0,0,0.2)' : '-4px 0 15px rgba(0,0,0,0.2)', backgroundColor: '#fff', display: 'flex', flexDirection: 'column' as const, boxSizing: 'border-box' as const, color: '#2d3748' };
+    }
+  }
   const innerContentStyle = (isExpanded: boolean) => ({ ...(isExpanded ? { flex: 1, height: '100%', width: '100%', border: '1px solid #e2e8f0', padding: '10px', overflowX: 'auto' as const, overflowY: 'auto' as const, position: 'relative' as const, textAlign: 'left' as const, whiteSpace: 'pre' as const, boxSizing: 'border-box' as const, fontSize: `${tempFontSize}px`, color: '#2d3748', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column' } : baseBoxStyle) } as React.CSSProperties)
 
   return (
@@ -189,29 +198,31 @@ function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onUpdate,
       {/* ★ カード内はスマホ時も縦にQとAを並べる (1frで全幅) */}
       <div style={{ display: 'grid', gridTemplateColumns: isMobileView ? '1fr' : '390px 390px', gap: '20px', justifyContent: 'center', width: '100%' }}>
         {/* Qのコンテナ */}
-        <div style={{ ...(expanded === 'q' ? expandedStyle(false) : {}) }}>
+        <div style={{ ...(expanded === 'q' || expanded === 'both' ? expandedStyle('q') : {}) }}>
           <strong style={{ color: '#2b6cb0', display: 'flex', justifyContent: 'space-between', marginBottom: '8px', alignItems: 'center' }}>
             <span style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>Q{index}: 問題{!isTestMode && <button onClick={() => onEdit(card)} style={{ ...miniBtnStyle, backgroundColor: '#bee3f8', color: '#2b6cb0' }}>編集する</button>}</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              {expanded === 'q' && <div style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '5px', color: '#2d3748' }}>一時拡大文字: <input type="range" min="5" max="32" value={tempFontSize} onChange={(e) => setTempFontSize(Number(e.target.value))} /> {tempFontSize}px</div>}
-              <button onClick={() => setExpanded(expanded === 'q' ? 'none' : 'q')} style={expandBtnStyleBig}>{expanded === 'q' ? '縮小 ⤡' : '拡大 ⤢'}</button>
+              {(expanded === 'q' || expanded === 'both') && <div style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '5px', color: '#2d3748' }}>一時拡大文字: <input type="range" min="5" max="32" value={tempFontSize} onChange={(e) => setTempFontSize(Number(e.target.value))} /> {tempFontSize}px</div>}
+              {expanded === 'q' && <button onClick={(e) => { e.stopPropagation(); setExpanded('both'); }} style={{ ...miniBtnStyle, backgroundColor: '#ebf8ff', color: '#2b6cb0' }}>＋解答も拡大</button>}
+              <button onClick={() => setExpanded(expanded === 'q' ? 'none' : (expanded === 'both' ? 'a' : 'q'))} style={expandBtnStyleBig}>{expanded === 'q' || expanded === 'both' ? '縮小 ⤡' : '拡大 ⤢'}</button>
             </div>
           </strong>
-          <div style={innerContentStyle(expanded === 'q')}>
+          <div style={innerContentStyle(expanded === 'q' || expanded === 'both')}>
             {renderImages(card.qImages, true)}
             <div dangerouslySetInnerHTML={{ __html: renderLatex(card.question) }} className="rich-text-content" style={{ flex: 1, textAlign: 'left' }} />
           </div>
         </div>
         {/* Aのコンテナ */}
-        <div style={{ ...(expanded === 'a' ? expandedStyle(true) : {}) }} onClick={() => { if (isTestMode) setRevealed(!revealed) }}>
+        <div style={{ ...(expanded === 'a' || expanded === 'both' ? expandedStyle('a') : {}) }} onClick={() => { if (isTestMode) setRevealed(!revealed) }}>
           <strong style={{ color: '#c53030', display: 'flex', justifyContent: 'space-between', marginBottom: '8px', alignItems: 'center' }}>
             <span>A{index}: 解答 {isTestMode && <span style={{fontSize: '0.8rem', color: '#e53e3e', marginLeft: '10px'}}>(クリックで表示)</span>}</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              {expanded === 'a' && <div style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '5px', color: '#2d3748' }}>一時拡大文字: <input type="range" min="5" max="32" value={tempFontSize} onChange={(e) => setTempFontSize(Number(e.target.value))} /> {tempFontSize}px</div>}
-              <button onClick={(e) => { e.stopPropagation(); setExpanded(expanded === 'a' ? 'none' : 'a'); }} style={expandBtnStyleBig}>{expanded === 'a' ? '縮小 ⤡' : '拡大 ⤢'}</button>
+              {(expanded === 'a' || expanded === 'both') && <div style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '5px', color: '#2d3748' }}>一時拡大文字: <input type="range" min="5" max="32" value={tempFontSize} onChange={(e) => setTempFontSize(Number(e.target.value))} /> {tempFontSize}px</div>}
+              {expanded === 'a' && <button onClick={(e) => { e.stopPropagation(); setExpanded('both'); }} style={{ ...miniBtnStyle, backgroundColor: '#fed7d7', color: '#c53030' }}>＋問題も拡大</button>}
+              <button onClick={(e) => { e.stopPropagation(); setExpanded(expanded === 'a' ? 'none' : (expanded === 'both' ? 'q' : 'a')); }} style={expandBtnStyleBig}>{expanded === 'a' || expanded === 'both' ? '縮小 ⤡' : '拡大 ⤢'}</button>
             </div>
           </strong>
-          <div style={{ ...innerContentStyle(expanded === 'a'), cursor: isTestMode ? 'pointer' : 'default' }}>
+          <div style={{ ...innerContentStyle(expanded === 'a' || expanded === 'both'), cursor: isTestMode ? 'pointer' : 'default' }}>
             <div style={{ opacity: (!revealed) ? 0 : 1, transition: 'opacity 0.2s', height: '100%', display: 'flex', flexDirection: 'column' }}>
               {renderImages(card.aImages, false)}
               <div dangerouslySetInnerHTML={{ __html: renderLatex(card.answer) }} className="rich-text-content" style={{ flex: 1, textAlign: 'left' }} />
@@ -266,8 +277,7 @@ export default function App() {
   const [qImages, setQImages] = useState<FloatingImage[]>([])
   const [aImages, setAImages] = useState<FloatingImage[]>([])
   const [selectedImgId, setSelectedImgId] = useState<string | null>(null)
-  const [createExpanded, setCreateExpanded] = useState<'none' | 'q' | 'a'>('none')
-
+  const [createExpanded, setCreateExpanded] = useState<'none' | 'q' | 'a' | 'both'>('none')
   const [stockImages, setStockImages] = useState<StockImage[]>([])
   const [tempCreateFontSize, setTempCreateFontSize] = useState<number>(16)
   const [hasSelection, setHasSelection] = useState(false)
@@ -280,7 +290,7 @@ export default function App() {
   const [isWordDeleteMode, setIsWordDeleteMode] = useState(false)
   const [newWordText, setNewWordText] = useState('') // ←追加：常時入力フォーム用
   const [dragOverWordId, setDragOverWordId] = useState<string | null>(null) // ←追加：ドラッグ＆ドロップ判定用
-  const [lastRange, setLastRange] = useState<Range | null>(null); // ←追加：カーソル位置の記憶用
+  const lastRangeRef = useRef<Range | null>(null);
   const [isDraggingWord, setIsDraggingWord] = useState(false); // ←追加：ドラッグ中の誤クリック防止用
   
   const [isEnglishMode, setIsEnglishMode] = useState(false)
@@ -309,43 +319,48 @@ export default function App() {
     }
 
     // ② QAボックス（contenteditable）にフォーカスがある場合の処理
-    if (lastRange) {
+    // ▼ ここを lastRangeRef.current に変更
+    if (lastRangeRef.current) {
       const sel = window.getSelection();
       sel?.removeAllRanges();
-      sel?.addRange(lastRange);
+      sel?.addRange(lastRangeRef.current);
     }
     
-    // ▼ ここから修正（execCommandをやめて、直接DOMノードを作成して挿入する）
     const sel = window.getSelection();
     if (sel && sel.rangeCount > 0) {
       const range = sel.getRangeAt(0);
       range.deleteContents();
       
-      // 挿入するワードの要素（span）を作成
       const span = document.createElement('span');
       span.style.backgroundColor = word.bgColor;
       span.style.color = word.textColor;
       span.style.padding = '1px 4px';
       span.style.borderRadius = '4px';
       span.style.margin = '0 2px';
-      span.contentEditable = "false"; // ユーザーが直接編集できないようにする
+      span.contentEditable = "false";
       span.textContent = word.text;
       
-      // カーソルが迷子にならないためのゼロ幅スペース（\u200B）を作成
       const zws = document.createTextNode('\u200B');
-      
-      // Nodeを挿入（この順番で入れると DOM上は span → zws の順に並びます）
       range.insertNode(zws);
       range.insertNode(span);
-      
-      // カーソルをゼロ幅スペースの直後に移動させる
       range.setStartAfter(zws);
       range.setEndAfter(zws);
       sel.removeAllRanges();
       sel.addRange(range);
       
-      // カーソル位置を記憶し直す
-      setLastRange(range.cloneRange());
+      // ▼ ここも lastRangeRef.current に変更
+      lastRangeRef.current = range.cloneRange();
+    }
+  };
+
+  const getCreateExpandedStyle = (type: 'q'|'a') => {
+    const isBoth = createExpanded === 'both';
+    if (isMobileView) {
+      if (isBoth) return { position: 'fixed' as const, left: 0, width: '100vw', height: '50vh', top: type === 'q' ? 0 : '50vh', zIndex: 10000, padding: '20px', backgroundColor: '#fff', display: 'flex', flexDirection: 'column' as const, boxSizing: 'border-box' as const, color: '#2d3748', borderBottom: type === 'q' ? '2px solid #cbd5e0' : 'none' };
+      return { position: 'fixed' as const, top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 10000, padding: '40px', backgroundColor: '#fff', display: 'flex', flexDirection: 'column' as const, boxSizing: 'border-box' as const, color: '#2d3748' };
+    } else {
+      if (isBoth) return { position: 'fixed' as const, top: 0, left: type === 'q' ? 0 : '50vw', width: '50vw', height: '100vh', zIndex: 10000, padding: '40px', boxShadow: type === 'q' ? '4px 0 15px rgba(0,0,0,0.1)' : '-4px 0 15px rgba(0,0,0,0.1)', backgroundColor: '#fff', display: 'flex', flexDirection: 'column' as const, boxSizing: 'border-box' as const, color: '#2d3748', borderRight: type === 'q' ? '1px solid #cbd5e0' : 'none' };
+      return { position: 'fixed' as const, top: 0, left: type === 'q' ? 0 : '50vw', width: '50vw', height: '100vh', zIndex: 10000, padding: '40px', boxShadow: type === 'q' ? '4px 0 15px rgba(0,0,0,0.2)' : '-4px 0 15px rgba(0,0,0,0.2)', backgroundColor: '#fff', display: 'flex', flexDirection: 'column' as const, boxSizing: 'border-box' as const, color: '#2d3748' };
     }
   };
 
@@ -475,15 +490,20 @@ export default function App() {
   };
 
   useEffect(() => { if (createExpanded === 'none') setTempCreateFontSize(fontSize); }, [createExpanded, fontSize])
+  // ▼ useEffect の handleSelection の中身を修正
   useEffect(() => {
     const handleSelection = () => { 
       const sel = window.getSelection(); 
-      setHasSelection(!!(sel && sel.rangeCount > 0 && !sel.isCollapsed)); 
+      const hasSel = !!(sel && sel.rangeCount > 0 && !sel.isCollapsed);
+      
+      // ★ booleanが切り替わった時だけStateを更新（無駄な再描画を防ぐ）
+      setHasSelection(prev => prev !== hasSel ? hasSel : prev); 
+      
       if (sel && sel.rangeCount > 0) {
         const r = sel.getRangeAt(0);
-        // エディタ内にカーソルがある時だけ位置を記憶する
         if (questionRef.current?.contains(r.commonAncestorContainer) || answerRef.current?.contains(r.commonAncestorContainer)) {
-          setLastRange(r);
+          // ★ StateではなくRefに保存（再描画を防ぐ）
+          lastRangeRef.current = r.cloneRange();
         }
       }
     };
@@ -1034,20 +1054,26 @@ export default function App() {
                         {createExpanded === 'none' && editorToolsJSX}
                         
                         <div style={{ display: 'grid', gridTemplateColumns: isMobileView ? '1fr' : '390px 390px', gap: '20px', marginBottom: '15px', justifyContent: 'center', width: '100%' }}>
-                          <div style={{ ...(createExpanded === 'q' ? expandedQStyle : {}) } as React.CSSProperties}>
+                          <div style={{ ...(createExpanded === 'q' || createExpanded === 'both' ? getCreateExpandedStyle('q') : {}) } as React.CSSProperties}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', alignItems: 'center' }}>
-                              <strong style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>問題{createExpanded === 'q' && <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.8rem', marginLeft: '10px' }}>文字: <input type="range" min="5" max="32" value={tempCreateFontSize} onChange={(e) => setTempCreateFontSize(Number(e.target.value))} /> {tempCreateFontSize}px</div>}<button onClick={() => setCreateExpanded(createExpanded === 'q' ? 'none' : 'q')} style={expandBtnStyleBig}>{createExpanded === 'q' ? '縮小 ⤡' : '拡大 ⤢'}</button></strong>
+                              <strong style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                                問題
+                                {(createExpanded === 'q' || createExpanded === 'both') && <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.8rem', marginLeft: '10px' }}>文字: <input type="range" min="5" max="32" value={tempCreateFontSize} onChange={(e) => setTempCreateFontSize(Number(e.target.value))} /> {tempCreateFontSize}px</div>}
+                                {createExpanded === 'q' && <button onClick={() => setCreateExpanded('both')} style={{ ...miniBtnStyle, backgroundColor: '#ebf8ff', color: '#2b6cb0' }}>＋解答も拡大</button>}
+                                <button onClick={() => setCreateExpanded(createExpanded === 'q' ? 'none' : (createExpanded === 'both' ? 'a' : 'q'))} style={expandBtnStyleBig}>{createExpanded === 'q' || createExpanded === 'both' ? '縮小 ⤡' : '拡大 ⤢'}</button>
+                              </strong>
                               <button onClick={() => handleFloatingImageInsertBtn(true)} style={miniBtnStyle}>🖼 画像</button>
                             </div>
                             
                             {/* ★ Q拡大画面のときにツールを表示 */}
-                            {createExpanded === 'q' && editorToolsJSX}
+                            {(createExpanded === 'q' || createExpanded === 'both') && editorToolsJSX}
 
-                            <div style={innerInputStyle(createExpanded === 'q')}>
+                            <div style={innerInputStyle(createExpanded === 'q' || createExpanded === 'both')}>
                               {isEnglishMode && (
                                 <div style={{ display: 'flex', gap: '10px', paddingBottom: '10px', marginBottom: '10px', borderBottom: '2px dashed #cbd5e0' }}>
-                                  <input id="engWordInput" type="text" placeholder="英単語を入力..." value={engWord} onChange={(e) => setEngWord(e.target.value)} onFocus={() => setLastRange(null)} style={{ flex: 1, padding: '6px', borderRadius: '4px', border: '1px solid #a0aec0', fontSize: '1rem', outline: 'none' }} />
-                                  <input type="text" placeholder="発音記号 (自動)" value={engPhonetic} onChange={(e) => setEngPhonetic(e.target.value)} onFocus={() => setLastRange(null)} style={{ width: '120px', padding: '6px', borderRadius: '4px', border: '1px solid #a0aec0', backgroundColor: '#f7fafc', fontSize: '0.9rem', outline: 'none' }} />
+                                  {/* ▼ onFocus={() => setLastRange(null)} を onFocus={() => { lastRangeRef.current = null; }} に変更 */}
+                                  <input id="engWordInput" type="text" placeholder="英単語を入力..." value={engWord} onChange={(e) => setEngWord(e.target.value)} onFocus={() => { lastRangeRef.current = null; }} style={{ flex: 1, padding: '6px', borderRadius: '4px', border: '1px solid #a0aec0', fontSize: '1rem', outline: 'none' }} />
+                                  <input type="text" placeholder="発音記号 (自動)" value={engPhonetic} onChange={(e) => setEngPhonetic(e.target.value)} onFocus={() => { lastRangeRef.current = null; }} style={{ width: '120px', padding: '6px', borderRadius: '4px', border: '1px solid #a0aec0', backgroundColor: '#f7fafc', fontSize: '0.9rem', outline: 'none' }} />
                                 </div>
                               )}
                               {renderNewImages(qImages, true)}
@@ -1055,16 +1081,21 @@ export default function App() {
                             </div>
                           </div>
                           
-                          <div style={{ ...(createExpanded === 'a' ? expandedAStyle : {}) } as React.CSSProperties}>
+                          <div style={{ ...(createExpanded === 'a' || createExpanded === 'both' ? getCreateExpandedStyle('a') : {}) } as React.CSSProperties}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', alignItems: 'center' }}>
-                              <strong style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>解答{createExpanded === 'a' && <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.8rem', marginLeft: '10px' }}>文字: <input type="range" min="5" max="32" value={tempCreateFontSize} onChange={(e) => setTempCreateFontSize(Number(e.target.value))} /> {tempCreateFontSize}px</div>}<button onClick={() => setCreateExpanded(createExpanded === 'a' ? 'none' : 'a')} style={expandBtnStyleBig}>{createExpanded === 'a' ? '縮小 ⤡' : '拡大 ⤢'}</button></strong>
+                              <strong style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                                解答
+                                {(createExpanded === 'a' || createExpanded === 'both') && <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.8rem', marginLeft: '10px' }}>文字: <input type="range" min="5" max="32" value={tempCreateFontSize} onChange={(e) => setTempCreateFontSize(Number(e.target.value))} /> {tempCreateFontSize}px</div>}
+                                {createExpanded === 'a' && <button onClick={() => setCreateExpanded('both')} style={{ ...miniBtnStyle, backgroundColor: '#fed7d7', color: '#c53030' }}>＋問題も拡大</button>}
+                                <button onClick={() => setCreateExpanded(createExpanded === 'a' ? 'none' : (createExpanded === 'both' ? 'q' : 'a'))} style={expandBtnStyleBig}>{createExpanded === 'a' || createExpanded === 'both' ? '縮小 ⤡' : '拡大 ⤢'}</button>
+                              </strong>
                               <button onClick={() => handleFloatingImageInsertBtn(false)} style={miniBtnStyle}>🖼 画像</button>
                             </div>
                             
                             {/* ★ A拡大画面のときにツールを表示 */}
                             {createExpanded === 'a' && editorToolsJSX}
 
-                            <div style={innerInputStyle(createExpanded === 'a')}>
+                            <div style={innerInputStyle(createExpanded === 'a' || createExpanded === 'both')}>
                               {renderNewImages(aImages, false)}
                               <div ref={answerRef} contentEditable className="rich-text-content" onDrop={(e) => handleDropFromStock(e, false)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, minHeight: '100px', outline: 'none', fontSize: `${createExpanded === 'a' ? tempCreateFontSize : fontSize}px`, textAlign: 'left' }} />
                             </div>
@@ -1083,37 +1114,59 @@ export default function App() {
                     if (isEnglishMode && engWord.trim()) {
                       let phonetic = engPhonetic.trim();
                       let inputWord = engWord.trim();
-                      let rawWord = inputWord.replace(/-/g, '').toLowerCase(); // API検索用（ハイフン除去）
-                      let formattedWord = inputWord; // ユーザーが入力したハイフンを優先
+                      let rawWord = inputWord.replace(/-/g, '').toLowerCase(); 
+                      let formattedWord = inputWord; 
                       
-                      // ① 発音記号が空なら無料APIから取得し、一般的なIPAに補正
-                      if (!phonetic) {
+                      if (!inputWord.includes('-') || !phonetic) {
+                        // ① 超高精度: Wiktionary API から直接「発音」と「音節」を抽出
                         try {
-                          const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${rawWord}`);
-                          if (res.ok) {
-                            const data = await res.json();
-                            const phonetics = data[0]?.phonetics || [];
-                            let phText = phonetics.find((p: any) => p.text && p.text.includes('ˈ'))?.text 
-                                      || phonetics.find((p: any) => p.text)?.text 
-                                      || data[0]?.phonetic 
-                                      || '';
-                            // 日本の辞書で一般的な表記に調整 (ɹ->r, ɡ->g, ɛ->e)
-                            phonetic = phText.replace(/ɹ/g, 'r').replace(/ɡ/g, 'g').replace(/ɛ/g, 'e');
+                          const wikRes = await fetch(`https://en.wiktionary.org/api/rest_v1/page/html/${rawWord}`);
+                          if (wikRes.ok) {
+                            const html = await wikRes.text();
+                            if (!phonetic) {
+                              const ipaMatch = html.match(/<span class="IPA">([^<]+)<\/span>/);
+                              if (ipaMatch) phonetic = ipaMatch[1];
+                            }
+                            if (!inputWord.includes('-')) {
+                              // 音節マーカー(‧)を抽出してハイフンに変換
+                              const hyphMatch = html.match(/Hyphenation:.*?<span[^>]*>((?:[^<]+|<!--.*?-->)+)<\/span>/is);
+                              if (hyphMatch) {
+                                let wiktHyph = hyphMatch[1].replace(/<!--.*?-->/g, '').replace(/<[^>]+>/g, '').trim();
+                                if (wiktHyph.includes('‧')) {
+                                  formattedWord = wiktHyph.replace(/‧/g, '-');
+                                }
+                              }
+                            }
                           }
                         } catch (e) {}
+
+                        // ② フォールバック: 発音が無ければ既存APIで補完
+                        if (!phonetic) {
+                          try {
+                            const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${rawWord}`);
+                            if (res.ok) {
+                              const data = await res.json();
+                              const phonetics = data[0]?.phonetics || [];
+                              let phText = phonetics.find((p: any) => p.text && p.text.includes('ˈ'))?.text 
+                                        || phonetics.find((p: any) => p.text)?.text 
+                                        || data[0]?.phonetic || '';
+                              phonetic = phText.replace(/ɹ/g, 'r').replace(/ɡ/g, 'g').replace(/ɛ/g, 'e');
+                            }
+                          } catch (e) {}
+                        }
+
+                        // ③ フォールバック: 音節が無ければ hypher + 独自補正ルール
+                        if (!formattedWord.includes('-')) {
+                          let hyphStr = h.hyphenate(rawWord).join('-');
+                          // hypher特有の変な区切り(ity)を強制補正 (例: fa-cil-ity -> fa-cil-i-ty)
+                          hyphStr = hyphStr.replace(/([bcdfghjklmnpqrstvwxyz])-?ity\b/gi, "$1-i-ty");
+                          formattedWord = hyphStr;
+                        }
                       }
                       
-                      // ② 音節の自動区切り処理（辞書ベースの本格アルゴリズム）
-                      if (!inputWord.includes('-')) {
-                        // hypherを使って辞書通りの音節配列を取得し、ハイフンで繋ぐ
-                        formattedWord = h.hyphenate(rawWord).join('-');
-                      }
-                      
-                      // ③ Qボックスの先頭に美しく挿入
                       const engHeader = `<div style="margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px dashed #cbd5e0; display: flex; align-items: baseline; gap: 15px;"><strong style="font-size: 1.4em; color: #2b6cb0; letter-spacing: 1px;">${formattedWord}</strong><span style="font-family: sans-serif; color: #718096; font-size: 1.1em;">${phonetic}</span></div>`;
                       qHTML = engHeader + qHTML;
                       
-                      // 入力欄をリセット
                       setEngWord('');
                       setEngPhonetic('');
                     }
