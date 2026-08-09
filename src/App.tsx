@@ -117,25 +117,27 @@ function TimerStopwatch() {
   )
 }
 
-function RichToolbar() {
+function RichToolbar({ hasSelection = false }: { hasSelection?: boolean }) {
   const handleFormat = (e: React.MouseEvent, command: string, value?: string) => {
     e.preventDefault();
     if (command === 'doubleUnderline') {
       const sel = window.getSelection();
       if (sel && sel.rangeCount > 0) {
         const range = sel.getRangeAt(0);
-        const div = document.createElement('div');
-        div.appendChild(range.cloneContents());
-        // ★ extractContents ではなく cloneContents を使い、文字の上の黒い二重線を引く
-        const html = `<span style="text-decoration: overline double #000;">${div.innerHTML}</span>`;
-        document.execCommand('insertHTML', false, html);
+        const span = document.createElement('span');
+        // ★ 文字の上に重なる黒の二重線（取り消し線ベース）
+        span.style.textDecoration = 'line-through double black';
+        // ★ 元のHTML構造（色や太字など）を維持したまま要素を移動させる
+        span.appendChild(range.extractContents());
+        range.insertNode(span);
+        sel.removeAllRanges();
       }
     } else { document.execCommand(command, false, value); }
   };
   return (
-    <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'center', backgroundColor: '#f7fafc', padding: '6px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+    <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', opacity: hasSelection ? 1 : 0.4, pointerEvents: hasSelection ? 'auto' : 'none', alignItems: 'center', backgroundColor: '#f7fafc', padding: '6px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
       <button onMouseDown={(e) => handleFormat(e, 'bold')} style={miniBtnStyle}>太字</button>
-      <button onMouseDown={(e) => handleFormat(e, 'doubleUnderline')} style={miniBtnStyle}>二重線(上)</button>
+      <button onMouseDown={(e) => handleFormat(e, 'doubleUnderline')} style={miniBtnStyle}>二重線</button>
       <div style={{ display: 'flex', gap: '4px', alignItems: 'center', marginLeft: '10px' }}>
         <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#2d3748' }}>色:</span>
         {['black', 'red', 'blue', 'green', '#e4d00a', '#8B4513'].map(c => <div key={c} onMouseDown={(e) => handleFormat(e, 'foreColor', c)} style={{ width: 18, height: 18, backgroundColor: c, cursor: 'pointer', border: '1px solid #ccc', borderRadius: '50%' }} title={c} />)}
@@ -177,34 +179,30 @@ function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onUpdate,
       )}
 
       {/* ★ 統合された共通コントロールヘッダー */}
-      {isCardExpanded && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', padding: '15px', backgroundColor: '#edf2f7', borderRadius: '8px', flexShrink: 0 }}>
-          <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#4a5568', display: isMobileView ? 'none' : 'block' }}>Q{index} & A{index}</h3>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap', marginLeft: 'auto' }}>
-            {!isTestMode && <button onClick={() => onEdit(card)} style={{ ...miniBtnStyle, backgroundColor: '#bee3f8', color: '#2b6cb0' }}>編集する</button>}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', color: '#2d3748' }}>
-              <label>文字サイズ:</label>
-              <input type="range" min="5" max="32" value={tempFontSize} onChange={(e) => setTempFontSize(Number(e.target.value))} />
-              <span>{tempFontSize}px</span>
-            </div>
-            <button onClick={() => setIsCardExpanded(false)} style={expandBtnStyleBig}>縮小 ⤡</button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', padding: isCardExpanded ? '15px' : '5px', backgroundColor: isCardExpanded ? '#edf2f7' : 'transparent', borderRadius: '8px', flexShrink: 0 }}>
+        <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#4a5568', display: isCardExpanded && isMobileView ? 'none' : 'block' }}>
+          {isCardExpanded ? `Q${index}` : ''}
+        </h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap', marginLeft: 'auto' }}>
+          {!isTestMode && <button onClick={() => onEdit(card)} style={{ ...miniBtnStyle, backgroundColor: '#bee3f8', color: '#2b6cb0' }}>編集する</button>}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', color: '#2d3748' }}>
+            <label>文字サイズ:</label>
+            <input type="range" min="5" max="32" value={tempFontSize} onChange={(e) => setTempFontSize(Number(e.target.value))} />
+            <span>{tempFontSize}px</span>
           </div>
+          <button onClick={() => setIsCardExpanded(!isCardExpanded)} style={expandBtnStyleBig}>
+            {isCardExpanded ? '縮小 ⤡' : '全体を拡大 ⤢'}
+          </button>
         </div>
-      )}
+      </div>
 
       {/* ★ QA本体 (拡大時は作成画面と同じレイアウト) */}
       <div style={{ display: isCardExpanded ? 'flex' : 'grid', gridTemplateColumns: !isCardExpanded ? (isMobileView ? '1fr' : '390px 390px') : undefined, flexDirection: isCardExpanded && !isMobileView ? 'row' : (isMobileView ? 'column' : 'row'), gap: '20px', justifyContent: 'center', width: '100%', flex: isCardExpanded ? 1 : 'none' }}>
         
         {/* Q枠 */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', border: '1px solid #cbd5e0', borderRadius: '6px', height: isCardExpanded ? 'auto' : '250px' }}>
-          <div style={{ padding: '8px 12px', backgroundColor: '#ebf8ff', borderBottom: '1px solid #cbd5e0', borderTopLeftRadius: '6px', borderTopRightRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <strong style={{ color: '#2b6cb0', fontSize: '1rem' }}>Q{index}: 問題</strong>
-            {!isCardExpanded && (
-              <div style={{ display: 'flex', gap: '10px' }}>
-                {!isTestMode && <button onClick={() => onEdit(card)} style={{ ...miniBtnStyle, backgroundColor: '#bee3f8', color: '#2b6cb0' }}>編集する</button>}
-                <button onClick={() => setIsCardExpanded(true)} style={expandBtnStyleBig}>全体を拡大 ⤢</button>
-              </div>
-            )}
+          <div style={{ padding: '8px 12px', backgroundColor: '#ebf8ff', borderBottom: '1px solid #cbd5e0', borderTopLeftRadius: '6px', borderTopRightRadius: '6px' }}>
+            <strong style={{ color: '#2b6cb0', fontSize: '1rem' }}>問題</strong>
           </div>
           <div style={{ flex: 1, padding: '10px', position: 'relative', overflowY: 'auto', fontSize: `${tempFontSize}px`, color: '#2d3748', textAlign: 'left', whiteSpace: 'pre-wrap' }}>
             {renderImages(card.qImages)}
@@ -215,12 +213,7 @@ function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onUpdate,
         {/* A枠 */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', border: '1px solid #cbd5e0', borderRadius: '6px', height: isCardExpanded ? 'auto' : '250px', cursor: isTestMode ? 'pointer' : 'default' }} onClick={() => { if (isTestMode) setRevealed(!revealed) }}>
           <div style={{ padding: '8px 12px', backgroundColor: '#fff5f5', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #cbd5e0', borderTopLeftRadius: '6px', borderTopRightRadius: '6px' }}>
-            <strong style={{ color: '#c53030', fontSize: '1rem' }}>A{index}: 解答 {isTestMode && <span style={{fontSize: '0.8rem', color: '#e53e3e', marginLeft: '10px'}}>(クリックで表示)</span>}</strong>
-            {!isCardExpanded && (
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button onClick={(e) => { e.stopPropagation(); setIsCardExpanded(true); }} style={expandBtnStyleBig}>全体を拡大 ⤢</button>
-              </div>
-            )}
+            <strong style={{ color: '#c53030', fontSize: '1rem' }}>解答 {isTestMode && <span style={{fontSize: '0.8rem', color: '#e53e3e', marginLeft: '10px'}}>(クリックで表示)</span>}</strong>
           </div>
           <div style={{ flex: 1, padding: '10px', position: 'relative', overflowY: 'auto', fontSize: `${tempFontSize}px`, color: '#2d3748', textAlign: 'left', whiteSpace: 'pre-wrap' }}>
             <div style={{ opacity: (!revealed) ? 0 : 1, transition: 'opacity 0.2s', height: '100%' }}>
