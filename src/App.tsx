@@ -453,9 +453,11 @@ export default function App() {
  useEffect(() => {
     const savedWords = localStorage.getItem('kiokushiyo_words'); if (savedWords) setWordItems(JSON.parse(savedWords));
     const savedStock = localStorage.getItem('kiokushiyo_stock'); if (savedStock) setStockImages(JSON.parse(savedStock));
+    const storedColors = localStorage.getItem('kiokushiyo_colors'); if (storedColors) setSavedColors(JSON.parse(storedColors));
   }, []);
   useEffect(() => { if (wordItems.length > 0) localStorage.setItem('kiokushiyo_words', JSON.stringify(wordItems)); }, [wordItems]);
   useEffect(() => { if (stockImages.length > 0) localStorage.setItem('kiokushiyo_stock', JSON.stringify(stockImages)); }, [stockImages]);
+  useEffect(() => { localStorage.setItem('kiokushiyo_colors', JSON.stringify(savedColors)); }, [savedColors]);
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault(); setAuthMessage('処理中...');
