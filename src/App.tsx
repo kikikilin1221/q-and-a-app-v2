@@ -300,11 +300,31 @@ export default function App() {
   const [isEnglishMode, setIsEnglishMode] = useState(false)
   const [engWord, setEngWord] = useState('')
   const [engPhonetic, setEngPhonetic] = useState('')
+  const [engSuggestions, setEngSuggestions] = useState<string[]>([]) // ★ 追加: 検索候補の保存用
 
   // ★ 一括選択用のステートとユーティリティ
   const [isWordBulkMode, setIsWordBulkMode] = useState(false)
   const [selectedWordIds, setSelectedWordIds] = useState<string[]>([])
   const [lastClickedWordId, setLastClickedWordId] = useState<string | null>(null)
+
+  // ★ 英単語の予測変換（サジェスト）を外部APIから取得する処理
+  useEffect(() => {
+    if (!isEnglishMode || !engWord.trim()) {
+      setEngSuggestions([]);
+      return;
+    }
+    // 入力中（タイピング中）は通信を控え、少し手が止まったら取得する（デバウンス処理）
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`https://api.datamuse.com/sug?s=${engWord.trim()}`);
+        if (res.ok) {
+          const data = await res.json();
+          setEngSuggestions(data.map((d: any) => d.word));
+        }
+      } catch (e) {}
+    }, 300); 
+    return () => clearTimeout(timer);
+  }, [engWord, isEnglishMode]);
 
   // 開いているフォルダを展開した「見た目順」のIDリストを取得する（範囲選択用）
   const getFlattenedVisibleWordIds = (parentId: string | null = null): string[] => {
@@ -1102,7 +1122,10 @@ export default function App() {
                       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '10px', position: 'relative', overflow: 'auto' }}>
                         {isEnglishMode && (
                           <div style={{ display: 'flex', gap: '10px', paddingBottom: '10px', marginBottom: '10px', borderBottom: '2px dashed #cbd5e0', flexShrink: 0 }}>
-                            <input id="engWordInput" type="text" placeholder="英単語を入力..." value={engWord} onChange={(e) => setEngWord(e.target.value)} onFocus={() => { lastRangeRef.current = null; }} style={{ flex: 1, padding: '6px', borderRadius: '4px', border: '1px solid #a0aec0', fontSize: '1rem', outline: 'none' }} />
+                            <input id="engWordInput" type="text" placeholder="英単語を入力..." value={engWord} onChange={(e) => setEngWord(e.target.value)} onFocus={() => { lastRangeRef.current = null; }} list="eng-word-suggestions" style={{ flex: 1, padding: '6px', borderRadius: '4px', border: '1px solid #a0aec0', fontSize: '1rem', outline: 'none' }} />
+                            <datalist id="eng-word-suggestions">
+                              {engSuggestions.map((word, idx) => <option key={idx} value={word} />)}
+                            </datalist>
                             <input type="text" placeholder="発音記号 (自動)" value={engPhonetic} onChange={(e) => setEngPhonetic(e.target.value)} onFocus={() => { lastRangeRef.current = null; }} style={{ width: '120px', padding: '6px', borderRadius: '4px', border: '1px solid #a0aec0', backgroundColor: '#f7fafc', fontSize: '0.9rem', outline: 'none' }} />
                           </div>
                         )}
