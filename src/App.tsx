@@ -285,9 +285,28 @@ export default function App() {
   const lastRangeRef = useRef<Range | null>(null);
   const [isDraggingWord, setIsDraggingWord] = useState(false);
   
+  // 【変更後】
   const [isEnglishMode, setIsEnglishMode] = useState(false)
   const [engWord, setEngWord] = useState('')
   const [engPhonetic, setEngPhonetic] = useState('')
+
+  // ★ 一括選択用のステートとユーティリティ
+  const [isWordBulkMode, setIsWordBulkMode] = useState(false)
+  const [selectedWordIds, setSelectedWordIds] = useState<string[]>([])
+  const [lastClickedWordId, setLastClickedWordId] = useState<string | null>(null)
+
+  // 開いているフォルダを展開した「見た目順」のIDリストを取得する（範囲選択用）
+  const getFlattenedVisibleWordIds = (parentId: string | null = null): string[] => {
+    let result: string[] = [];
+    const children = wordItems.filter(w => w.parentId === parentId);
+    for (const child of children) {
+      result.push(child.id);
+      if (child.type === 'folder' && child.isOpen) {
+        result = result.concat(getFlattenedVisibleWordIds(child.id));
+      }
+    }
+    return result;
+  };
 
   const handleInsertWord = (word: WordItem) => {
     const activeEl = document.activeElement as HTMLInputElement;
@@ -820,6 +839,7 @@ export default function App() {
 
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
                           <strong style={{ color: '#4a5568' }}>ワード一覧（タップで挿入）</strong>
+                          // 【変更後】
                           <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                             <form onSubmit={(e) => { e.preventDefault(); if (newWordText.trim()) { setWordItems([...wordItems, { id: `word-${Date.now()}`, type: 'word', text: newWordText.trim(), bgColor: '#bee3f8', textColor: '#2b6cb0', parentId: null, isOpen: true }]); setNewWordText(''); } }} style={{ display: 'flex', gap: '4px' }}>
                               <input type="text" value={newWordText} onChange={(e) => setNewWordText(e.target.value)} placeholder="新しいワードを入力..." style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #cbd5e0', fontSize: '0.9rem', outline: 'none' }} />
@@ -827,10 +847,12 @@ export default function App() {
                             </form>
                             <button onClick={() => setWordItems([...wordItems, { id: `wfolder-${Date.now()}`, type: 'folder', text: '新規フォルダ', bgColor: '#edf2f7', textColor: '#2d3748', parentId: null, isOpen: true }])} style={miniBtnStyle}>📁 フォルダ</button>
                             <button onClick={() => setIsWordDeleteMode(!isWordDeleteMode)} style={{ ...miniBtnStyle, backgroundColor: isWordDeleteMode ? '#e53e3e' : '#f7fafc', color: isWordDeleteMode ? 'white' : '#2d3748' }}>{isWordDeleteMode ? '完了' : '🗑 整理'}</button>
+                            <button onClick={() => { setIsWordBulkMode(!isWordBulkMode); if (isWordBulkMode) { setSelectedWordIds([]); setLastClickedWordId(null); } }} style={{ ...miniBtnStyle, backgroundColor: isWordBulkMode ? '#ed8936' : '#f7fafc', color: isWordBulkMode ? 'white' : '#2d3748' }}>{isWordBulkMode ? '完了' : '☑ 一括選択'}</button>
                           </div>
                         </div>
                         
-                        <div onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverWordId(null); const draggedId = e.dataTransfer.getData('wordId'); if(!draggedId) return; const newWords = [...wordItems]; const draggedIndex = newWords.findIndex(w => w.id === draggedId); const draggedItem = newWords[draggedIndex]; newWords.splice(draggedIndex, 1); draggedItem.parentId = null; newWords.unshift(draggedItem); setWordItems(newWords); }} onDragOver={(e) => { e.preventDefault(); setDragOverWordId('root-top'); }} onDragLeave={() => setDragOverWordId(null)} style={{ padding: '8px', color: '#a0aec0', fontSize: '0.8rem', fontStyle: 'italic', borderBottom: dragOverWordId === 'root-top' ? '3px solid #3182ce' : 'none' }}>
+                        // 【変更後】
+                        <div onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverWordId(null); const draggedIdsStr = e.dataTransfer.getData('draggedWordIds'); if(!draggedIdsStr) return; const draggedIds: string[] = JSON.parse(draggedIdsStr); let newWords = [...wordItems]; const draggedItems = draggedIds.map(id => newWords.find(w => w.id === id)).filter(Boolean) as WordItem[]; newWords = newWords.filter(w => !draggedIds.includes(w.id)); draggedItems.forEach(item => item.parentId = null); newWords.unshift(...draggedItems); setWordItems(newWords); }} onDragOver={(e) => { e.preventDefault(); setDragOverWordId('root-top'); }} onDragLeave={() => setDragOverWordId(null)} style={{ padding: '8px', color: '#a0aec0', fontSize: '0.8rem', fontStyle: 'italic', borderBottom: dragOverWordId === 'root-top' ? '3px solid #3182ce' : 'none' }}>
                           ↓ ここにドロップしてフォルダから出す・一番上に移動
                         </div>
 
@@ -852,28 +874,34 @@ export default function App() {
                                     const isRight = dragOverWordId === `${word.id}-right`;
                                     const isInside = dragOverWordId === `${word.id}-inside`;
 
+                                    // 【変更後】
                                     return (
                                     <div key={word.id} style={{ display: 'flex', flexDirection: 'column', width: isBlock ? '100%' : 'auto' }}>
                                       <div style={{ position: 'relative', display: 'flex', width: '100%' }}>
                                         <button
                                           draggable={!isWordDeleteMode}
-                                          onDragStart={(e) => { setIsDraggingWord(true); e.dataTransfer.setData('wordId', word.id); e.stopPropagation(); }}
+                                          onDragStart={(e) => { setIsDraggingWord(true); const dragIds = (isWordBulkMode && selectedWordIds.includes(word.id)) ? selectedWordIds : [word.id]; e.dataTransfer.setData('draggedWordIds', JSON.stringify(dragIds)); e.stopPropagation(); }}
                                           onDragEnd={() => { setTimeout(() => setIsDraggingWord(false), 50); }}
                                           onDrop={(e) => {
                                             e.preventDefault(); e.stopPropagation(); setDragOverWordId(null);
-                                            const draggedId = e.dataTransfer.getData('wordId');
-                                            if (!draggedId || draggedId === word.id) return;
-                                            const newWords = [...wordItems]; const draggedIndex = newWords.findIndex(w => w.id === draggedId);
-                                            const draggedItem = newWords[draggedIndex]; newWords.splice(draggedIndex, 1);
+                                            const draggedIdsStr = e.dataTransfer.getData('draggedWordIds');
+                                            if (!draggedIdsStr) return;
+                                            const draggedIds: string[] = JSON.parse(draggedIdsStr);
+                                            if (draggedIds.includes(word.id)) return;
+                                            let isCyclic = false;
+                                            let currentParent: string | null = (dragOverWordId === `${word.id}-inside`) ? word.id : word.parentId;
+                                            while (currentParent) { if (draggedIds.includes(currentParent)) { isCyclic = true; break; } currentParent = wordItems.find(w => w.id === currentParent)?.parentId || null; }
+                                            if (isCyclic) return;
+                                            let newWords = [...wordItems];
+                                            const draggedItems = draggedIds.map(id => newWords.find(w => w.id === id)).filter(Boolean) as WordItem[];
+                                            newWords = newWords.filter(w => !draggedIds.includes(w.id));
                                             const targetIndex = newWords.findIndex(w => w.id === word.id);
-                                            if (dragOverWordId === `${word.id}-inside`) {
-                                              let currentParent: string | null = word.id; let isCyclic = false;
-                                              while (currentParent) { if (currentParent === draggedId) { isCyclic = true; break; } currentParent = newWords.find(w => w.id === currentParent)?.parentId || null; }
-                                              if (!isCyclic) { draggedItem.parentId = word.id; newWords.push(draggedItem); } else { newWords.splice(draggedIndex, 0, draggedItem); }
-                                            } else {
-                                              draggedItem.parentId = word.parentId;
-                                              if (dragOverWordId === `${word.id}-top` || dragOverWordId === `${word.id}-left`) { newWords.splice(targetIndex, 0, draggedItem); } else { newWords.splice(targetIndex + 1, 0, draggedItem); }
-                                            }
+                                            draggedItems.forEach((draggedItem, idx) => {
+                                              if (dragOverWordId === `${word.id}-inside`) { draggedItem.parentId = word.id; newWords.push(draggedItem); } else {
+                                                draggedItem.parentId = word.parentId;
+                                                if (dragOverWordId === `${word.id}-top` || dragOverWordId === `${word.id}-left`) { newWords.splice(targetIndex + idx, 0, draggedItem); } else { newWords.splice(targetIndex + 1 + idx, 0, draggedItem); }
+                                              }
+                                            });
                                             setWordItems(newWords);
                                           }}
                                           onDragOver={(e) => { 
@@ -887,9 +915,33 @@ export default function App() {
                                           }}
                                           onDragLeave={() => setDragOverWordId(null)}
                                           onDoubleClick={(e) => { e.stopPropagation(); if (word.type === 'folder') { const newName = prompt('フォルダ名を変更', word.text); if (newName) setWordItems(wordItems.map(w => w.id === word.id ? { ...w, text: newName } : w)); } else { setTempBgColor(word.bgColor); setTempTextColor(word.textColor); setEditingWordId(word.id); } }}
-                                          onClick={(e) => { if (isDraggingWord) return; if (word.type === 'folder') { setWordItems(wordItems.map(w => w.id === word.id ? { ...w, isOpen: !w.isOpen } : w)); } else if (!isWordDeleteMode) { handleInsertWord(word); } }}
+                                          onClick={(e) => {
+                                            if (isDraggingWord) return;
+                                            if (isWordBulkMode) {
+                                              const flatIds = getFlattenedVisibleWordIds(null);
+                                              if (selectedWordIds.includes(word.id)) {
+                                                setSelectedWordIds(selectedWordIds.filter(id => id !== word.id));
+                                                setLastClickedWordId(null);
+                                              } else {
+                                                if (lastClickedWordId && flatIds.includes(lastClickedWordId)) {
+                                                  const idx1 = flatIds.indexOf(lastClickedWordId);
+                                                  const idx2 = flatIds.indexOf(word.id);
+                                                  const start = Math.min(idx1, idx2);
+                                                  const end = Math.max(idx1, idx2);
+                                                  const rangeIds = flatIds.slice(start, end + 1);
+                                                  setSelectedWordIds(Array.from(new Set([...selectedWordIds, ...rangeIds])));
+                                                  setLastClickedWordId(word.id);
+                                                } else {
+                                                  setSelectedWordIds([...selectedWordIds, word.id]);
+                                                  setLastClickedWordId(word.id);
+                                                }
+                                              }
+                                              return;
+                                            }
+                                            if (word.type === 'folder') { setWordItems(wordItems.map(w => w.id === word.id ? { ...w, isOpen: !w.isOpen } : w)); } else if (!isWordDeleteMode) { handleInsertWord(word); }
+                                          }}
                                           onMouseDown={(e) => { if (isWordDeleteMode) setWordItems(wordItems.filter(w => w.id !== word.id)); }}
-                                          style={{ width: isBlock ? '100%' : 'auto', textAlign: 'left', padding: '6px 12px', borderRadius: word.type === 'folder' ? '6px' : '20px', borderTop: isTop ? '3px solid #3182ce' : '1px solid #cbd5e0', borderBottom: isBottom ? '3px solid #3182ce' : '1px solid #cbd5e0', borderLeft: isLeft ? '3px solid #3182ce' : '1px solid #cbd5e0', borderRight: isRight ? '3px solid #3182ce' : '1px solid #cbd5e0', backgroundColor: isInside ? '#ebf8ff' : word.bgColor, color: word.textColor, cursor: isWordDeleteMode ? 'pointer' : (word.type === 'folder' ? 'pointer' : 'grab'), fontWeight: 'bold', fontSize: '1rem', transition: 'all 0.1s', display: 'flex', alignItems: 'center', gap: '5px', boxSizing: 'border-box' }}
+                                          style={{ width: isBlock ? '100%' : 'auto', textAlign: 'left', padding: '6px 12px', borderRadius: word.type === 'folder' ? '6px' : '20px', borderTop: isTop ? '3px solid #3182ce' : '1px solid #cbd5e0', borderBottom: isBottom ? '3px solid #3182ce' : '1px solid #cbd5e0', borderLeft: isLeft ? '3px solid #3182ce' : '1px solid #cbd5e0', borderRight: isRight ? '3px solid #3182ce' : '1px solid #cbd5e0', outline: (isWordBulkMode && selectedWordIds.includes(word.id)) ? '3px solid #ed8936' : 'none', outlineOffset: '-1px', backgroundColor: isInside ? '#ebf8ff' : word.bgColor, color: word.textColor, cursor: isWordDeleteMode ? 'pointer' : (word.type === 'folder' ? 'pointer' : 'grab'), fontWeight: 'bold', fontSize: '1rem', transition: 'all 0.1s', display: 'flex', alignItems: 'center', gap: '5px', boxSizing: 'border-box' }}
                                         >
                                           {word.type === 'folder' && <span>{word.isOpen ? '📂' : '📁'}</span>} {word.text}
                                         </button>
