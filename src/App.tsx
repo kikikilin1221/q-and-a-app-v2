@@ -850,7 +850,7 @@ export default function App() {
                         </div>
                         
                         
-                        <div onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverWordId(null); const draggedIdsStr = e.dataTransfer.getData('draggedWordIds'); if(!draggedIdsStr) return; const draggedIds: string[] = JSON.parse(draggedIdsStr); let newWords = [...wordItems]; const draggedItems = draggedIds.map(id => newWords.find(w => w.id === id)).filter(Boolean) as WordItem[]; newWords = newWords.filter(w => !draggedIds.includes(w.id)); draggedItems.forEach(item => item.parentId = null); newWords.unshift(...draggedItems); setWordItems(newWords); setSelectedWordIds([]); setLastClickedWordId(null); }} onDragOver={(e) => { e.preventDefault(); setDragOverWordId('root-top'); }} onDragLeave={() => setDragOverWordId(null)} style={{ padding: '8px', color: '#a0aec0', fontSize: '0.8rem', fontStyle: 'italic', borderBottom: dragOverWordId === 'root-top' ? '3px solid #3182ce' : 'none' }}>
+                        <div onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverWordId(null); setTimeout(() => setIsDraggingWord(false), 50); const draggedIdsStr = e.dataTransfer.getData('draggedWordIds'); if(!draggedIdsStr) return; const draggedIds: string[] = JSON.parse(draggedIdsStr); let newWords = [...wordItems]; const draggedItems = draggedIds.map(id => newWords.find(w => w.id === id)).filter(Boolean) as WordItem[]; newWords = newWords.filter(w => !draggedIds.includes(w.id)); draggedItems.forEach(item => item.parentId = null); newWords.unshift(...draggedItems); setWordItems(newWords); setSelectedWordIds([]); setLastClickedWordId(null); }} onDragOver={(e) => { e.preventDefault(); setDragOverWordId('root-top'); }} onDragLeave={() => setDragOverWordId(null)} style={{ padding: '8px', color: '#a0aec0', fontSize: '0.8rem', fontStyle: 'italic', borderBottom: dragOverWordId === 'root-top' ? '3px solid #3182ce' : 'none' }}>
                           ↓ ここにドロップしてフォルダから出す・一番上に移動
                         </div>
 
@@ -881,6 +881,7 @@ export default function App() {
                                           onDragEnd={() => { setTimeout(() => setIsDraggingWord(false), 50); }}
                                           onDrop={(e) => {
                                             e.preventDefault(); e.stopPropagation(); setDragOverWordId(null);
+                                            setTimeout(() => setIsDraggingWord(false), 50); // ★移動に伴うドラッグフラグの解除漏れを防止
                                             const draggedIdsStr = e.dataTransfer.getData('draggedWordIds');
                                             if (!draggedIdsStr) return;
                                             const draggedIds: string[] = JSON.parse(draggedIdsStr);
