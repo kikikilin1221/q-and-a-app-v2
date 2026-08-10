@@ -165,7 +165,9 @@ function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onUpdate,
     boxSizing: 'border-box' as const,
     scrollSnapAlign: 'start',
     borderBottom: isMobileView ? 'none' : '1px solid #e2e8f0',
-    borderRight: isMobileView ? '1px solid #e2e8f0' : 'none'
+    borderRight: isMobileView ? '1px solid #e2e8f0' : 'none',
+    overflowY: 'auto' as const,
+    overflowX: 'hidden' as const
   } : baseStyle;
 
   const renderImages = (images: FloatingImage[]) => {
@@ -209,23 +211,23 @@ function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onUpdate,
       <div style={{ display: isCardExpanded ? 'flex' : 'grid', gridTemplateColumns: !isCardExpanded ? (isMobileView ? '1fr' : '390px 390px') : undefined, flexDirection: isCardExpanded && !isMobileView ? 'row' : (isMobileView ? 'column' : 'row'), gap: '20px', justifyContent: 'center', width: '100%', flex: isCardExpanded ? 1 : 'none' }}>
         
         {/* Q枠 */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', border: '1px solid #cbd5e0', borderRadius: '6px', height: isCardExpanded ? 'auto' : '250px' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', border: '1px solid #cbd5e0', borderRadius: '6px', height: isCardExpanded ? '100%' : '250px', minHeight: 0 }}>
           <div style={{ padding: '8px 12px', backgroundColor: '#ebf8ff', borderBottom: '1px solid #cbd5e0', borderTopLeftRadius: '6px', borderTopRightRadius: '6px' }}>
             <strong style={{ color: '#2b6cb0', fontSize: '1rem' }}>問題</strong>
           </div>
-          <div style={{ flex: 1, padding: '10px', position: 'relative', overflowY: 'auto', fontSize: `${tempFontSize}px`, color: '#2d3748', textAlign: 'left', whiteSpace: 'pre-wrap' }}>
+          <div style={{ flex: 1, padding: '10px', position: 'relative', overflow: 'auto', fontSize: `${tempFontSize}px`, color: '#2d3748', textAlign: 'left', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
             {renderImages(card.qImages)}
-            <div dangerouslySetInnerHTML={{ __html: renderLatex(card.question) }} className="rich-text-content" />
+            <div dangerouslySetInnerHTML={{ __html: renderLatex(card.question) }} className="rich-text-content" style={{ minWidth: 'min-content' }} />
           </div>
         </div>
         
         {/* A枠 */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', border: '1px solid #cbd5e0', borderRadius: '6px', height: isCardExpanded ? 'auto' : '250px', cursor: isTestMode ? 'pointer' : 'default' }} onClick={() => { if (isTestMode) setRevealed(!revealed) }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', border: '1px solid #cbd5e0', borderRadius: '6px', height: isCardExpanded ? '100%' : '250px', minHeight: 0, cursor: isTestMode ? 'pointer' : 'default' }} onClick={() => { if (isTestMode) setRevealed(!revealed) }}>
           <div style={{ padding: '8px 12px', backgroundColor: '#fff5f5', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #cbd5e0', borderTopLeftRadius: '6px', borderTopRightRadius: '6px' }}>
             <strong style={{ color: '#c53030', fontSize: '1rem' }}>解答 {isTestMode && <span style={{fontSize: '0.8rem', color: '#e53e3e', marginLeft: '10px'}}>(クリックで表示)</span>}</strong>
           </div>
-          <div style={{ flex: 1, padding: '10px', position: 'relative', overflowY: 'auto', fontSize: `${tempFontSize}px`, color: '#2d3748', textAlign: 'left', whiteSpace: 'pre-wrap' }}>
-            <div style={{ opacity: (!revealed) ? 0 : 1, transition: 'opacity 0.2s', height: '100%' }}>
+          <div style={{ flex: 1, padding: '10px', position: 'relative', overflow: 'auto', fontSize: `${tempFontSize}px`, color: '#2d3748', textAlign: 'left', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+            <div style={{ opacity: (!revealed) ? 0 : 1, transition: 'opacity 0.2s', height: '100%', minWidth: 'min-content' }}>
               {renderImages(card.aImages)}
               <div dangerouslySetInnerHTML={{ __html: renderLatex(card.answer) }} className="rich-text-content" />
             </div>
@@ -1020,12 +1022,12 @@ export default function App() {
                     flex: isExpanded ? 1 : 'none'
                   }}>
                     {/* Q枠 */}
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', border: '1px solid #cbd5e0', borderRadius: '6px' }}>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', border: '1px solid #cbd5e0', borderRadius: '6px', height: isExpanded ? '100%' : '250px', minHeight: 0 }}>
                       <div style={{ padding: '10px', backgroundColor: '#ebf8ff', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #cbd5e0', borderTopLeftRadius: '6px', borderTopRightRadius: '6px' }}>
                         <strong style={{ color: '#2b6cb0', fontSize: '1.1rem' }}>問題</strong>
                         <button onClick={() => handleFloatingImageInsertBtn(true)} style={miniBtnStyle}>🖼 画像</button>
                       </div>
-                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '10px', position: 'relative', overflowY: 'auto', minHeight: isExpanded ? '40vh' : '250px' }}>
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '10px', position: 'relative', overflow: 'auto' }}>
                         {isEnglishMode && (
                           <div style={{ display: 'flex', gap: '10px', paddingBottom: '10px', marginBottom: '10px', borderBottom: '2px dashed #cbd5e0', flexShrink: 0 }}>
                             <input id="engWordInput" type="text" placeholder="英単語を入力..." value={engWord} onChange={(e) => setEngWord(e.target.value)} onFocus={() => { lastRangeRef.current = null; }} style={{ flex: 1, padding: '6px', borderRadius: '4px', border: '1px solid #a0aec0', fontSize: '1rem', outline: 'none' }} />
@@ -1033,19 +1035,19 @@ export default function App() {
                           </div>
                         )}
                         {renderNewImages(qImages, true)}
-                        <div ref={questionRef} contentEditable onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, true)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre-wrap', color: '#000000' }} />
+                        <div ref={questionRef} contentEditable onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, true)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: '#000000', minWidth: 'min-content' }} />
                       </div>
                     </div>
                     
                     {/* A枠 */}
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', border: '1px solid #cbd5e0', borderRadius: '6px' }}>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', border: '1px solid #cbd5e0', borderRadius: '6px', height: isExpanded ? '100%' : '250px', minHeight: 0 }}>
                       <div style={{ padding: '10px', backgroundColor: '#fff5f5', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #cbd5e0', borderTopLeftRadius: '6px', borderTopRightRadius: '6px' }}>
                         <strong style={{ color: '#c53030', fontSize: '1.1rem' }}>解答</strong>
                         <button onClick={() => handleFloatingImageInsertBtn(false)} style={miniBtnStyle}>🖼 画像</button>
                       </div>
-                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '10px', position: 'relative', overflowY: 'auto', minHeight: isExpanded ? '40vh' : '250px' }}>
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '10px', position: 'relative', overflow: 'auto' }}>
                         {renderNewImages(aImages, false)}
-                        <div ref={answerRef} contentEditable onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, false)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre-wrap', color: '#000000' }} />
+                        <div ref={answerRef} contentEditable onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, false)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: '#000000', minWidth: 'min-content' }} />
                       </div>
                     </div>
                   </div>
