@@ -208,10 +208,10 @@ function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onUpdate,
       </div>
 
       {/* ★ QA本体 (拡大時は作成画面と同じレイアウト) */}
-      <div style={{ display: isCardExpanded ? 'flex' : 'grid', gridTemplateColumns: !isCardExpanded ? (isMobileView ? '1fr' : '390px 390px') : undefined, flexDirection: isCardExpanded && !isMobileView ? 'row' : (isMobileView ? 'column' : 'row'), gap: '20px', justifyContent: 'center', width: '100%', flex: isCardExpanded ? 1 : 'none' }}>
+      <div style={{ display: isCardExpanded ? 'flex' : 'grid', gridTemplateColumns: !isCardExpanded ? (isMobileView ? 'minmax(0, 1fr)' : '390px 390px') : undefined, flexDirection: isCardExpanded && !isMobileView ? 'row' : (isMobileView ? 'column' : 'row'), gap: '20px', justifyContent: 'center', width: '100%', flex: isCardExpanded ? 1 : 'none' }}>
         
         {/* Q枠 */}
-        <div style={{ flex: (!isCardExpanded && isMobileView) ? 'none' : 1, display: 'flex', flexDirection: 'column', border: '1px solid #cbd5e0', borderRadius: '6px', height: isCardExpanded ? '100%' : '250px', minHeight: isCardExpanded ? 0 : '250px' }}>
+        <div style={{ flex: (!isCardExpanded && isMobileView) ? 'none' : 1, display: 'flex', flexDirection: 'column', border: '1px solid #cbd5e0', borderRadius: '6px', height: isCardExpanded ? '100%' : '250px', minHeight: isCardExpanded ? 0 : '250px', minWidth: 0, width: '100%', boxSizing: 'border-box' }}>
           <div style={{ padding: '8px 12px', backgroundColor: '#ebf8ff', borderBottom: '1px solid #cbd5e0', borderTopLeftRadius: '6px', borderTopRightRadius: '6px' }}>
             <strong style={{ color: '#2b6cb0', fontSize: '1rem' }}>問題</strong>
           </div>
@@ -222,7 +222,7 @@ function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onUpdate,
         </div>
         
         {/* A枠 */}
-        <div style={{ flex: (!isCardExpanded && isMobileView) ? 'none' : 1, display: 'flex', flexDirection: 'column', border: '1px solid #cbd5e0', borderRadius: '6px', height: isCardExpanded ? '100%' : '250px', minHeight: isCardExpanded ? 0 : '250px', cursor: isTestMode ? 'pointer' : 'default' }} onClick={() => { if (isTestMode) setRevealed(!revealed) }}>
+        <div style={{ flex: (!isCardExpanded && isMobileView) ? 'none' : 1, display: 'flex', flexDirection: 'column', border: '1px solid #cbd5e0', borderRadius: '6px', height: isCardExpanded ? '100%' : '250px', minHeight: isCardExpanded ? 0 : '250px', minWidth: 0, width: '100%', boxSizing: 'border-box', cursor: isTestMode ? 'pointer' : 'default' }} onClick={() => { if (isTestMode) setRevealed(!revealed) }}>
           <div style={{ padding: '8px 12px', backgroundColor: '#fff5f5', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #cbd5e0', borderTopLeftRadius: '6px', borderTopRightRadius: '6px' }}>
             <strong style={{ color: '#c53030', fontSize: '1rem' }}>解答 {isTestMode && <span style={{fontSize: '0.8rem', color: '#e53e3e', marginLeft: '10px'}}>(クリックで表示)</span>}</strong>
           </div>
