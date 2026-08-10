@@ -145,16 +145,28 @@ function RichToolbar() {
   );
 }
 
-function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onUpdate, onEdit, fontSize, isMobileView, isGlobalCardsExpanded, setIsGlobalCardsExpanded }: { card: Card, index: number, isTestMode: boolean, isEditMode: boolean, onDelete: (id: string) => void, onUpdate: (c: Card) => void, onEdit: (c: Card) => void, fontSize: number, isMobileView: boolean, isGlobalCardsExpanded: boolean, setIsGlobalCardsExpanded: (val: boolean) => void }) {
+function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onUpdate, onEdit, fontSize, isMobileView, isCardExpanded, onToggleExpand }: { card: Card, index: number, isTestMode: boolean, isEditMode: boolean, onDelete: (id: string) => void, onUpdate: (c: Card) => void, onEdit: (c: Card) => void, fontSize: number, isMobileView: boolean, isCardExpanded: boolean, onToggleExpand: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isOver } = useSortable({ id: card.id })
   const [revealed, setRevealed] = useState(false)
   const [tempFontSize, setTempFontSize] = useState<number>(card.fontSize || 16)
 
   useEffect(() => { setRevealed(!isTestMode) }, [isTestMode])
-  useEffect(() => { if (!isGlobalCardsExpanded) setTempFontSize(card.fontSize || 16) }, [isGlobalCardsExpanded, card.fontSize])
+  useEffect(() => { if (!isCardExpanded) setTempFontSize(card.fontSize || 16) }, [isCardExpanded, card.fontSize])
 
-  const baseStyle = { transform: isGlobalCardsExpanded ? 'none' : CSS.Transform.toString(transform), transition: isGlobalCardsExpanded ? 'none' : transition, border: isOver ? '3px dashed #3182ce' : '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', backgroundColor: '#ffffff', boxShadow: isOver ? '0 4px 12px rgba(49, 130, 206, 0.3)' : '0 2px 4px rgba(0,0,0,0.05)', position: 'relative' as const, zIndex: 1, color: '#2d3748', ...((isMobileView && !isEditMode) ? { flex: '0 0 100%', scrollSnapAlign: 'center', boxSizing: 'border-box' as const, minWidth: '0' } : {}) }
-  const cardContainerStyle = isGlobalCardsExpanded ? { ...baseStyle, padding: isMobileView ? '10px' : '30px', height: isMobileView ? '85vh' : 'auto', minHeight: isMobileView ? 'auto' : '85vh', display: 'flex', flexDirection: 'column' as const } : baseStyle;
+  const baseStyle = { transform: isCardExpanded ? 'none' : CSS.Transform.toString(transform), transition: isCardExpanded ? 'none' : transition, border: isOver ? '3px dashed #3182ce' : '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', backgroundColor: '#ffffff', boxShadow: isOver ? '0 4px 12px rgba(49, 130, 206, 0.3)' : '0 2px 4px rgba(0,0,0,0.05)', position: 'relative' as const, zIndex: 1, color: '#2d3748', ...((isMobileView && !isEditMode) ? { flex: '0 0 100%', scrollSnapAlign: 'center', boxSizing: 'border-box' as const, minWidth: '0' } : {}) }
+  const cardContainerStyle = isCardExpanded ? {
+    width: isMobileView ? '100vw' : '100%',
+    height: '100vh',
+    flex: isMobileView ? '0 0 100vw' : 'none',
+    backgroundColor: '#fff',
+    padding: isMobileView ? '10px' : '30px',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    boxSizing: 'border-box' as const,
+    scrollSnapAlign: 'start',
+    borderBottom: isMobileView ? 'none' : '1px solid #e2e8f0',
+    borderRight: isMobileView ? '1px solid #e2e8f0' : 'none'
+  } : baseStyle;
 
   const renderImages = (images: FloatingImage[]) => {
     return (
@@ -168,7 +180,7 @@ function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onUpdate,
 
   return (
     <div ref={setNodeRef} style={cardContainerStyle}>
-      {isEditMode && !isGlobalCardsExpanded && (
+      {isEditMode && !isCardExpanded && (
         <div {...attributes} {...listeners} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', borderBottom: '1px solid #eee', paddingBottom: '8px', cursor: 'grab' }}>
           <span style={{ fontSize: '0.85rem', color: '#666', fontWeight: 'bold' }}>⠿ ここをドラッグして並び替え</span>
           <button onClick={() => onDelete(card.id)} style={{ color: '#e53e3e', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold' }}>削除</button>
@@ -176,9 +188,9 @@ function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onUpdate,
       )}
 
       {/* ★ 統合された共通コントロールヘッダー */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', padding: isGlobalCardsExpanded ? '15px' : '5px', backgroundColor: isGlobalCardsExpanded ? '#edf2f7' : 'transparent', borderRadius: '8px', flexShrink: 0 }}>
-        <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#4a5568', display: isGlobalCardsExpanded && isMobileView ? 'none' : 'block' }}>
-          {isGlobalCardsExpanded ? `Q${index}` : ''}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', padding: isCardExpanded ? '15px' : '5px', backgroundColor: isCardExpanded ? '#edf2f7' : 'transparent', borderRadius: '8px', flexShrink: 0 }}>
+        <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#4a5568', display: isCardExpanded && isMobileView ? 'none' : 'block' }}>
+          {isCardExpanded ? `Q${index}` : ''}
         </h3>
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap', marginLeft: 'auto' }}>
           {!isTestMode && <button onClick={() => onEdit(card)} style={{ ...miniBtnStyle, backgroundColor: '#bee3f8', color: '#2b6cb0' }}>編集する</button>}
@@ -187,17 +199,17 @@ function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onUpdate,
             <input type="range" min="5" max="32" value={tempFontSize} onChange={(e) => setTempFontSize(Number(e.target.value))} />
             <span>{tempFontSize}px</span>
           </div>
-          <button onClick={() => setIsGlobalCardsExpanded(!isGlobalCardsExpanded)} style={expandBtnStyleBig}>
-            {isGlobalCardsExpanded ? '縮小 ⤡' : '全体を拡大 ⤢'}
+          <button onClick={onToggleExpand} style={expandBtnStyleBig}>
+            {isCardExpanded ? '縮小 ⤡' : '全体を拡大 ⤢'}
           </button>
         </div>
       </div>
 
       {/* ★ QA本体 (拡大時は作成画面と同じレイアウト) */}
-      <div style={{ display: isGlobalCardsExpanded ? 'flex' : 'grid', gridTemplateColumns: !isGlobalCardsExpanded ? (isMobileView ? '1fr' : '390px 390px') : undefined, flexDirection: isGlobalCardsExpanded && !isMobileView ? 'row' : (isMobileView ? 'column' : 'row'), gap: '20px', justifyContent: 'center', width: '100%', flex: isGlobalCardsExpanded ? 1 : 'none' }}>
+      <div style={{ display: isCardExpanded ? 'flex' : 'grid', gridTemplateColumns: !isCardExpanded ? (isMobileView ? '1fr' : '390px 390px') : undefined, flexDirection: isCardExpanded && !isMobileView ? 'row' : (isMobileView ? 'column' : 'row'), gap: '20px', justifyContent: 'center', width: '100%', flex: isCardExpanded ? 1 : 'none' }}>
         
         {/* Q枠 */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', border: '1px solid #cbd5e0', borderRadius: '6px', height: isGlobalCardsExpanded ? 'auto' : '250px' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', border: '1px solid #cbd5e0', borderRadius: '6px', height: isCardExpanded ? 'auto' : '250px' }}>
           <div style={{ padding: '8px 12px', backgroundColor: '#ebf8ff', borderBottom: '1px solid #cbd5e0', borderTopLeftRadius: '6px', borderTopRightRadius: '6px' }}>
             <strong style={{ color: '#2b6cb0', fontSize: '1rem' }}>問題</strong>
           </div>
@@ -208,7 +220,7 @@ function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onUpdate,
         </div>
         
         {/* A枠 */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', border: '1px solid #cbd5e0', borderRadius: '6px', height: isGlobalCardsExpanded ? 'auto' : '250px', cursor: isTestMode ? 'pointer' : 'default' }} onClick={() => { if (isTestMode) setRevealed(!revealed) }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', border: '1px solid #cbd5e0', borderRadius: '6px', height: isCardExpanded ? 'auto' : '250px', cursor: isTestMode ? 'pointer' : 'default' }} onClick={() => { if (isTestMode) setRevealed(!revealed) }}>
           <div style={{ padding: '8px 12px', backgroundColor: '#fff5f5', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #cbd5e0', borderTopLeftRadius: '6px', borderTopRightRadius: '6px' }}>
             <strong style={{ color: '#c53030', fontSize: '1rem' }}>解答 {isTestMode && <span style={{fontSize: '0.8rem', color: '#e53e3e', marginLeft: '10px'}}>(クリックで表示)</span>}</strong>
           </div>
@@ -254,6 +266,7 @@ export default function App() {
   const [editingCardId, setEditingCardId] = useState<string | null>(null)
   const [isMobileView, setIsMobileView] = useState(window.innerWidth <= 768);
   const [isRoomDeleteMode, setIsRoomDeleteMode] = useState(false);
+  const [isGlobalCardsExpanded, setIsGlobalCardsExpanded] = useState(false); // ★ 追加
 
   useEffect(() => {
     const handleResize = () => setIsMobileView(window.innerWidth <= 768);
@@ -292,9 +305,6 @@ export default function App() {
   const [isWordBulkMode, setIsWordBulkMode] = useState(false)
   const [selectedWordIds, setSelectedWordIds] = useState<string[]>([])
   const [lastClickedWordId, setLastClickedWordId] = useState<string | null>(null)
-  
-  // ★ 閲覧・テスト時のカード拡大状態を共有するグローバルステート
-  const [isGlobalCardsExpanded, setIsGlobalCardsExpanded] = useState(false)
 
   // 開いているフォルダを展開した「見た目順」のIDリストを取得する（範囲選択用）
   const getFlattenedVisibleWordIds = (parentId: string | null = null): string[] => {
@@ -1111,8 +1121,20 @@ export default function App() {
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => { const { active, over } = e; if (over && active.id !== over.id && activeFile) { const updatedCards = arrayMove(activeFile.cards, activeFile.cards.findIndex(c => c.id === active.id), activeFile.cards.findIndex(c => c.id === over.id)); setItems(items.map(i => i.id === activeFile.id ? { ...i, cards: updatedCards } : i)) } }}>
                 <SortableContext items={activeFile?.cards.map(c => c.id) || []} strategy={verticalListSortingStrategy}>
                   {/* ★ スマホで閲覧・テスト中は横スクロール（スワイプ）にする */}
-                  <div style={{ display: 'flex', flexDirection: (isMobileView && !isEditMode) ? 'row' : 'column', gap: '20px', overflowX: (isMobileView && !isEditMode) ? 'auto' : 'visible', scrollSnapType: (isMobileView && !isEditMode) ? 'x mandatory' : 'none', paddingBottom: '10px' }}>
-                    {activeFile?.cards.map((card, index) => <SortableCard key={card.id} card={card} index={index + 1} isTestMode={isTestMode} isEditMode={isEditMode} fontSize={fontSize} isMobileView={isMobileView} isGlobalCardsExpanded={isGlobalCardsExpanded} setIsGlobalCardsExpanded={setIsGlobalCardsExpanded} onDelete={(id) => setItems(items.map(i => i.id === activeFileId ? { ...i, cards: i.cards.filter(c => c.id !== id) } : i))} onUpdate={(updatedCard) => setItems(items.map(i => i.id === activeFileId ? { ...i, cards: i.cards.map(c => c.id === updatedCard.id ? updatedCard : c) } : i))} onEdit={(c)=>{ setEditingCardId(c.id); setFontSize(c.fontSize || 16); if (questionRef.current) questionRef.current.innerHTML = c.question; if (answerRef.current) answerRef.current.innerHTML = c.answer; setQImages([...c.qImages]); setAImages([...c.aImages]); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />)}
+                  <div style={
+                    isGlobalCardsExpanded ? {
+                      position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 10000,
+                      backgroundColor: '#fff',
+                      display: isMobileView ? 'flex' : 'block',
+                      flexDirection: isMobileView ? 'row' : undefined,
+                      overflowX: isMobileView ? 'auto' : 'hidden',
+                      overflowY: isMobileView ? 'hidden' : 'auto',
+                      scrollSnapType: isMobileView ? 'x mandatory' : 'y mandatory',
+                    } : {
+                      display: 'flex', flexDirection: (isMobileView && !isEditMode) ? 'row' : 'column', gap: '20px', overflowX: (isMobileView && !isEditMode) ? 'auto' : 'visible', scrollSnapType: (isMobileView && !isEditMode) ? 'x mandatory' : 'none', paddingBottom: '10px'
+                    }
+                  }>
+                    {activeFile?.cards.map((card, index) => <SortableCard key={card.id} card={card} index={index + 1} isTestMode={isTestMode} isEditMode={isEditMode} fontSize={fontSize} isMobileView={isMobileView} isCardExpanded={isGlobalCardsExpanded} onToggleExpand={() => setIsGlobalCardsExpanded(!isGlobalCardsExpanded)} onDelete={(id) => setItems(items.map(i => i.id === activeFileId ? { ...i, cards: i.cards.filter(c => c.id !== id) } : i))} onUpdate={(updatedCard) => setItems(items.map(i => i.id === activeFileId ? { ...i, cards: i.cards.map(c => c.id === updatedCard.id ? updatedCard : c) } : i))} onEdit={(c)=>{ setEditingCardId(c.id); setFontSize(c.fontSize || 16); if (questionRef.current) questionRef.current.innerHTML = c.question; if (answerRef.current) answerRef.current.innerHTML = c.answer; setQImages([...c.qImages]); setAImages([...c.aImages]); window.scrollTo({ top: 0, behavior: 'smooth' }); setIsGlobalCardsExpanded(false); }} />)}
                   </div>
                 </SortableContext>
               </DndContext>
