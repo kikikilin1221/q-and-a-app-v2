@@ -8,7 +8,6 @@ import {
   useSensor,
   useSensors
 } from '@dnd-kit/core'
-import type { DragEndEvent } from '@dnd-kit/core'
 import {
   arrayMove,
   SortableContext,
@@ -145,7 +144,7 @@ function RichToolbar() {
   );
 }
 
-function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onUpdate, onEdit, fontSize, isMobileView, isCardExpanded, onToggleExpand }: { card: Card, index: number, isTestMode: boolean, isEditMode: boolean, onDelete: (id: string) => void, onUpdate: (c: Card) => void, onEdit: (c: Card) => void, fontSize: number, isMobileView: boolean, isCardExpanded: boolean, onToggleExpand: () => void }) {
+function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onEdit, isMobileView, isCardExpanded, onToggleExpand }: { card: Card, index: number, isTestMode: boolean, isEditMode: boolean, onDelete: (id: string) => void, onEdit: (c: Card) => void, isMobileView: boolean, isCardExpanded: boolean, onToggleExpand: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isOver } = useSortable({ id: card.id })
   const [revealed, setRevealed] = useState(false)
   const [tempFontSize, setTempFontSize] = useState<number>(card.fontSize || 16)
@@ -253,8 +252,7 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [authMode, setAuthMode] = useState<'login' | 'signup' | 'verify'>('login')
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [otpToken, setOtpToken] = useState('')
+　const [password, setPassword] = useState('')
   const [authMessage, setAuthMessage] = useState('')
   const [isAuthLoading, setIsAuthLoading] = useState(true)
 
@@ -440,7 +438,7 @@ export default function App() {
     const fetchCloudData = async () => {
       if (!session?.user?.id) return;
       try {
-        const { data, error } = await supabase.from('user_store').select('items').eq('id', session.user.id).single();
+        const { data } = await supabase.from('user_store').select('items').eq('id', session.user.id).single();
         if (data && data.items) setItems(data.items);
       } catch (err) {} finally { setIsDataLoaded(true); }
     };
@@ -484,7 +482,7 @@ export default function App() {
     }
   };
 
-  // ★ 自動大文字化＆単独「i」の「I」変換処理
+// ★ 自動大文字化＆単独「i」の「I」変換処理 (精度向上版)
   const handleAutoFormat = () => {
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0) return;
@@ -497,14 +495,33 @@ export default function App() {
     const offset = range.startOffset;
 
     // ① 左端（文頭）の英文字を自動大文字化
-    // 前に文字がない、または改行(BR)や段落(DIV)の直後の場合に適用
-    if (!textNode.previousSibling || textNode.previousSibling.nodeName === 'BR' || textNode.previousSibling.nodeName === 'DIV') {
-      newText = newText.replace(/^[\s ]*([a-z])/g, (match) => match.toUpperCase());
+    let isBlockStart = false;
+    let node: Node | null = textNode;
+    while (node && node.nodeName !== 'DIV' && !(node as Element).classList?.contains('rich-text-content')) {
+      if (node.previousSibling) {
+         if (node.previousSibling.nodeType === Node.TEXT_NODE && !node.previousSibling.nodeValue?.trim()) {
+           node = node.previousSibling;
+           continue;
+         }
+         if (node.previousSibling.nodeName === 'BR') {
+           isBlockStart = true;
+         }
+         break;
+      }
+      node = node.parentNode as Node | null;
+      if (node && (node as Element).classList?.contains('rich-text-content')) {
+        isBlockStart = true;
+        break;
+      }
+    }
+    if (!node) isBlockStart = true;
+
+    if (isBlockStart) {
+      newText = newText.replace(/^[\s ]*([a-z])/, (match) => match.toUpperCase());
     }
 
     // ② 独立した「i」を「I」に変換
-    // 単語の一部ではない 'i' (前後に空白や句読点、または文頭・文末のとき)
-    newText = newText.replace(/(^|[\s ])i(?=[\s ]|$|[.,?!;:\)\]}])/g, '$1I');
+    newText = newText.replace(/(^|[\s ])i(?=[\s .,?!;:\)\]}])/g, '$1I');
 
     if (newText !== originalText) {
       textNode.nodeValue = newText;
@@ -514,7 +531,7 @@ export default function App() {
         range.setEnd(textNode, offset);
         sel.removeAllRanges();
         sel.addRange(range);
-      } catch(e) {}
+      } catch(err) {}
     }
   };
 
@@ -569,7 +586,7 @@ export default function App() {
             );
           } else {
             return (
-              <Rnd key={img.id} lockAspectRatio={true} size={{ width: img.width, height: img.height }} position={{ x: img.x, y: img.y }} onDragStop={(e, d) => isQ ? setQImages(prev => prev.map(i => i.id === img.id ? { ...i, x: d.x, y: d.y } : i)) : setAImages(prev => prev.map(i => i.id === img.id ? { ...i, x: d.x, y: d.y } : i))} onResizeStop={(e, dir, ref, delta, pos) => isQ ? setQImages(prev => prev.map(i => i.id === img.id ? { ...i, width: parseInt(ref.style.width), height: parseInt(ref.style.height), ...pos } : i)) : setAImages(prev => prev.map(i => i.id === img.id ? { ...i, width: parseInt(ref.style.width), height: parseInt(ref.style.height), ...pos } : i))} tabIndex={0} onFocus={() => setSelectedImgId(img.id)} onBlur={() => setSelectedImgId(null)} onKeyDown={(e: any) => handleImageKeyDown(e, img.id, isQ)} style={{ border: selectedImgId === img.id ? '2px solid red' : '2px dashed #3182ce', zIndex: 11, outline: 'none' }}>
+              <Rnd key={img.id} lockAspectRatio={true} size={{ width: img.width, height: img.height }} position={{ x: img.x, y: img.y }} onDragStop={(_e, d) => isQ ? setQImages(prev => prev.map(i => i.id === img.id ? { ...i, x: d.x, y: d.y } : i)) : setAImages(prev => prev.map(i => i.id === img.id ? { ...i, x: d.x, y: d.y } : i))} onResizeStop={(_e, _dir, ref, _delta, pos) => isQ ? setQImages(prev => prev.map(i => i.id === img.id ? { ...i, width: parseInt(ref.style.width), height: parseInt(ref.style.height), ...pos } : i)) : setAImages(prev => prev.map(i => i.id === img.id ? { ...i, width: parseInt(ref.style.width), height: parseInt(ref.style.height), ...pos } : i))} tabIndex={0} onFocus={() => setSelectedImgId(img.id)} onBlur={() => setSelectedImgId(null)} onKeyDown={(e: any) => handleImageKeyDown(e, img.id, isQ)} style={{ border: selectedImgId === img.id ? '2px solid red' : '2px dashed #3182ce', zIndex: 11, outline: 'none' }}>
                 <button onClick={(e) => { e.stopPropagation(); togglePinNew(img.id, isQ) }} style={{ position: 'absolute', top: -25, right: 0, ...miniBtnStyle }}>固定</button>
                 <img src={img.src} style={{ width: '100%', height: '100%', pointerEvents: 'none' }} alt="" />
               </Rnd>
@@ -979,7 +996,7 @@ export default function App() {
                                           }}
                                           onDragLeave={() => setDragOverWordId(null)}
                                           onDoubleClick={(e) => { e.stopPropagation(); if (word.type === 'folder') { const newName = prompt('フォルダ名を変更', word.text); if (newName) setWordItems(wordItems.map(w => w.id === word.id ? { ...w, text: newName } : w)); } else { setTempBgColor(word.bgColor); setTempTextColor(word.textColor); setEditingWordId(word.id); } }}
-                                          onClick={(e) => {
+                                          onClick={() => {
                                             if (isDraggingWord) return;
                                             if (isWordBulkMode) {
                                               const flatIds = getFlattenedVisibleWordIds(null);
@@ -1008,7 +1025,7 @@ export default function App() {
                                             if (isWordDeleteMode) {
                                               setWordItems(wordItems.filter(w => w.id !== word.id)); 
                                             } else {
-                                              e.preventDefault(); // ★ 追加：フォーカス消失を防ぎ、確実にカーソル位置を復活させる
+                                              e.preventDefault(); 
                                             }
                                           }}
                                           style={{ width: isBlock ? '100%' : 'auto', textAlign: 'left', padding: '6px 12px', borderRadius: word.type === 'folder' ? '6px' : '20px', borderTop: isTop ? '3px solid #3182ce' : '1px solid #cbd5e0', borderBottom: isBottom ? '3px solid #3182ce' : '1px solid #cbd5e0', borderLeft: isLeft ? '3px solid #3182ce' : '1px solid #cbd5e0', borderRight: isRight ? '3px solid #3182ce' : '1px solid #cbd5e0', outline: (isWordBulkMode && selectedWordIds.includes(word.id)) ? '3px solid #ed8936' : 'none', outlineOffset: '-1px', backgroundColor: isInside ? '#ebf8ff' : word.bgColor, color: word.textColor, cursor: isWordDeleteMode ? 'pointer' : (word.type === 'folder' ? 'pointer' : 'grab'), fontWeight: 'bold', fontSize: '1rem', transition: 'all 0.1s', display: 'flex', alignItems: 'center', gap: '5px', boxSizing: 'border-box' }}
@@ -1090,7 +1107,8 @@ export default function App() {
                           </div>
                         )}
                         {renderNewImages(qImages, true)}
-                        <div ref={questionRef} contentEditable onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, true)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre', color: '#000000', minWidth: 'min-content' }} />
+                        {/* ★ ここで handleAutoFormat を onInput で呼び出すように設定！ */}
+                        <div ref={questionRef} contentEditable onInput={() => { handleAutoFormat(); saveCursorPosition(); }} onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, true)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre', color: '#000000', minWidth: 'min-content' }} />
                       </div>
                     </div>
                     
@@ -1102,7 +1120,8 @@ export default function App() {
                       </div>
                       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '10px', position: 'relative', overflow: 'auto' }}>
                         {renderNewImages(aImages, false)}
-                        <div ref={answerRef} contentEditable onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, false)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre', color: '#000000', minWidth: 'min-content' }} />
+                        {/* ★ ここで handleAutoFormat を onInput で呼び出すように設定！ */}
+                        <div ref={answerRef} contentEditable onInput={() => { handleAutoFormat(); saveCursorPosition(); }} onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, false)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre', color: '#000000', minWidth: 'min-content' }} />
                       </div>
                     </div>
                   </div>
@@ -1191,7 +1210,8 @@ export default function App() {
                       display: 'flex', flexDirection: (isMobileView && !isEditMode) ? 'row' : 'column', gap: '20px', overflowX: (isMobileView && !isEditMode) ? 'auto' : 'visible', scrollSnapType: (isMobileView && !isEditMode) ? 'x mandatory' : 'none', paddingBottom: '10px'
                     }
                   }>
-                    {activeFile?.cards.map((card, index) => <SortableCard key={card.id} card={card} index={index + 1} isTestMode={isTestMode} isEditMode={isEditMode} fontSize={fontSize} isMobileView={isMobileView} isCardExpanded={isGlobalCardsExpanded} onToggleExpand={() => setIsGlobalCardsExpanded(!isGlobalCardsExpanded)} onDelete={(id) => setItems(items.map(i => i.id === activeFileId ? { ...i, cards: i.cards.filter(c => c.id !== id) } : i))} onUpdate={(updatedCard) => setItems(items.map(i => i.id === activeFileId ? { ...i, cards: i.cards.map(c => c.id === updatedCard.id ? updatedCard : c) } : i))} onEdit={(c)=>{ setEditingCardId(c.id); setFontSize(c.fontSize || 16); if (questionRef.current) questionRef.current.innerHTML = c.question; if (answerRef.current) answerRef.current.innerHTML = c.answer; setQImages([...c.qImages]); setAImages([...c.aImages]); window.scrollTo({ top: 0, behavior: 'smooth' }); setIsGlobalCardsExpanded(false); }} />)}
+                    {/* ★ 不要になった onUpdate と fontSize を削除しました */}
+                    {activeFile?.cards.map((card, index) => <SortableCard key={card.id} card={card} index={index + 1} isTestMode={isTestMode} isEditMode={isEditMode} isMobileView={isMobileView} isCardExpanded={isGlobalCardsExpanded} onToggleExpand={() => setIsGlobalCardsExpanded(!isGlobalCardsExpanded)} onDelete={(id) => setItems(items.map(i => i.id === activeFileId ? { ...i, cards: i.cards.filter(c => c.id !== id) } : i))} onEdit={(c)=>{ setEditingCardId(c.id); setFontSize(c.fontSize || 16); if (questionRef.current) questionRef.current.innerHTML = c.question; if (answerRef.current) answerRef.current.innerHTML = c.answer; setQImages([...c.qImages]); setAImages([...c.aImages]); window.scrollTo({ top: 0, behavior: 'smooth' }); setIsGlobalCardsExpanded(false); }} />)}
                   </div>
                 </SortableContext>
               </DndContext>
@@ -1206,7 +1226,3 @@ export default function App() {
 const btnStyle = { padding: '8px 16px', borderRadius: '6px', border: '1px solid #cbd5e0', backgroundColor: '#ffffff', cursor: 'pointer', fontWeight: 'bold' as const, color: '#2d3748' }
 const miniBtnStyle = { padding: '4px 8px', fontSize: '0.8rem', borderRadius: '4px', border: '1px solid #ccc', cursor: 'pointer', backgroundColor: '#f7fafc', fontWeight: 'bold' as const, color: '#2d3748' }
 const expandBtnStyleBig = { padding: '8px 16px', fontSize: '1rem', borderRadius: '6px', border: '2px solid #a0aec0', cursor: 'pointer', backgroundColor: '#edf2f7', fontWeight: 'bold' as const, color: '#2d3748' }
-const baseInputStyle = { fontFamily: 'sans-serif', position: 'relative' as const, height: '250px', width: '100%', minWidth: '0', maxWidth: '100%', border: '1px solid #cbd5e0', borderRadius: '6px', padding: '10px', backgroundColor: '#fff', outline: 'none', overflowX: 'auto' as const, overflowY: 'auto' as const, whiteSpace: 'pre-wrap' as const, boxSizing: 'border-box' as const, textAlign: 'left' as const, color: '#2d3748', display: 'flex', flexDirection: 'column' }
-const expandedQStyle = { position: 'fixed', top: 0, left: 0, width: '50vw', height: '100vh', zIndex: 10000, padding: '40px', boxShadow: '4px 0 15px rgba(0,0,0,0.2)', backgroundColor: '#fff', display: 'flex', flexDirection: 'column' as const, boxSizing: 'border-box' as const, color: '#2d3748' }
-const expandedAStyle = { position: 'fixed', top: 0, right: 0, width: '50vw', height: '100vh', zIndex: 10000, padding: '40px', boxShadow: '-4px 0 15px rgba(0,0,0,0.2)', backgroundColor: '#fff', display: 'flex', flexDirection: 'column' as const, boxSizing: 'border-box' as const, color: '#2d3748' }
-const innerInputStyle = (isExpanded: boolean) => ({ ...(isExpanded ? { flex: 1, height: '100%', width: '100%', border: '1px solid #e2e8f0', padding: '10px', overflowX: 'auto' as const, overflowY: 'auto' as const, position: 'relative' as const, whiteSpace: 'pre-wrap' as const, boxSizing: 'border-box' as const, textAlign: 'left' as const, color: '#2d3748', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column' } : baseInputStyle) } as React.CSSProperties)
