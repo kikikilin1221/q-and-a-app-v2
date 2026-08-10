@@ -272,6 +272,10 @@ export default function App() {
   const [currentScreen, setCurrentScreen] = useState<'room' | 'editor'>('room')
   const [items, setItems] = useState<AppItem[]>([])
   
+  // ★ 追加: ローカル保存用のステート
+  const [localItems, setLocalItems] = useState<AppItem[]>([])
+  const [isLocalDataLoaded, setIsLocalDataLoaded] = useState(false)
+
   const [activeFileId, setActiveFileId] = useState<string | null>(null)
   const [editingItemId, setEditingItemId] = useState<string | null>(null)
   const [dragOverRoomId, setDragOverRoomId] = useState<string | null>(null)
@@ -477,7 +481,18 @@ export default function App() {
   const questionRef = useRef<HTMLDivElement>(null)
   const answerRef = useRef<HTMLDivElement>(null)
   
-  const activeFile = items.find(i => i.id === activeFileId && i.type === 'file')
+  // ★ 変更: クラウドかローカルのどちらかからアクティブなファイルを探す
+  const activeFile = items.find(i => i.id === activeFileId && i.type === 'file') || localItems.find(i => i.id === activeFileId && i.type === 'file')
+  
+  // ★ 追加: 開いているファイルがどちらの部屋のものかを自動判定して更新する関数
+  const updateActiveFile = (updater: (file: AppItem) => AppItem) => {
+    if (items.some(i => i.id === activeFileId)) {
+      setItems(items.map(i => i.id === activeFileId ? updater(i) : i));
+    } else if (localItems.some(i => i.id === activeFileId)) {
+      setLocalItems(localItems.map(i => i.id === activeFileId ? updater(i) : i));
+    }
+  };
+
   // 日本語IMEの変換（スペースキー）と確定（エンターキー）を阻害する KeyboardSensor を削除
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
@@ -505,6 +520,16 @@ export default function App() {
     const saveCloudData = async () => { await supabase.from('user_store').upsert({ id: session.user.id, items: items }); };
     saveCloudData();
   }, [items, isDataLoaded, session]);
+
+  // ★ 追加: ローカル部屋の読み込みと自動保存
+  useEffect(() => {
+    const savedLocalItems = localStorage.getItem('kiokushiyo_local_room');
+    if (savedLocalItems) setLocalItems(JSON.parse(savedLocalItems));
+    setIsLocalDataLoaded(true);
+  }, []);
+  useEffect(() => {
+    if (isLocalDataLoaded) localStorage.setItem('kiokushiyo_local_room', JSON.stringify(localItems));
+  }, [localItems, isLocalDataLoaded]);
 
  useEffect(() => {
     const savedWords = localStorage.getItem('kiokushiyo_words'); if (savedWords) setWordItems(JSON.parse(savedWords));
@@ -766,19 +791,15 @@ export default function App() {
       // --- 部屋（ルーム）画面 ---
       currentScreen === 'room' ? (
         <div style={{ maxWidth: '900px', margin: '40px auto', padding: '20px', fontFamily: '"Zen Maru Gothic", sans-serif' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '2px solid #e2e8f0', paddingBottom: '15px', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '2px solid #e2e8f0', paddingBottom: '15px', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-              {/* ★ ロゴ画像に隠しコマンドの発動条件（onClick）を追加 */}
-              <img 
-                src="/logo.jpg" 
-                alt="ロゴ" 
-                onClick={handleSecretClick}
-                style={{ width: '60px', height: '60px', borderRadius: '12px', objectFit: 'cover', cursor: 'pointer', userSelect: 'none' }} 
-              />
+              <img src="/logo.jpg" alt="ロゴ" onClick={handleSecretClick} style={{ width: '60px', height: '60px', borderRadius: '12px', objectFit: 'cover', cursor: 'pointer', userSelect: 'none' }} />
               <h1 style={{ color: isDarkMode ? '#ffffff' : '#2d3748', margin: 0, fontSize: '2.2rem', letterSpacing: '2px', fontFamily: '"Zen Maru Gothic", sans-serif', fontWeight: 900 }}>キオクシヨ</h1>
             </div>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              {/* ★ テーマ切り替えボタン */}
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <button onClick={() => setIsRoomDeleteMode(!isRoomDeleteMode)} style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e0', backgroundColor: isRoomDeleteMode ? '#e53e3e' : '#fff', cursor: 'pointer', color: isRoomDeleteMode ? '#fff' : '#2d3748', fontWeight: 'bold' }}>
+                {isRoomDeleteMode ? '完了' : '🗑 削除モード'}
+              </button>
               <button onClick={() => setIsDarkMode(!isDarkMode)} style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #a0aec0', backgroundColor: isDarkMode ? '#2d3748' : '#fff', cursor: 'pointer', color: isDarkMode ? '#e2e8f0' : '#2d3748', fontWeight: 'bold' }}>
                 {isDarkMode ? '☀️ ライトモード' : '🌙 ダークモード'}
               </button>
@@ -788,72 +809,18 @@ export default function App() {
           
           {!isDataLoaded && <div style={{ padding: '10px', backgroundColor: '#e2e8f0', color: '#2d3748', borderRadius: '4px', marginBottom: '15px' }}>⏳ クラウドからデータを読み込み中...</div>}
 
-          <div style={{ margin: '20px 0', display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
-            <button onClick={() => setItems([...items, { id: `file-${Date.now()}`, type: 'file', name: '新規一問一答ファイル', parentId: null, cards: [] }])} style={{ ...btnStyle, backgroundColor: '#3182ce', color: 'white' }}>＋ 新規ファイル</button>
-            <button onClick={() => setItems([...items, { id: `folder-${Date.now()}`, type: 'folder', name: '新規フォルダ', parentId: null, cards: [] }])} style={{ ...btnStyle, backgroundColor: '#718096', color: 'white' }}>＋ 新規フォルダ</button>
-            <button onClick={() => setIsRoomDeleteMode(!isRoomDeleteMode)} style={{ ...btnStyle, backgroundColor: isRoomDeleteMode ? '#e53e3e' : '#cbd5e0', color: isRoomDeleteMode ? '#fff' : '#2d3748' }}>
-              {isRoomDeleteMode ? '完了' : '🗑 削除モード'}
-            </button>
-
-            {/* ★ バックアップ書き出しボタン */}
-            <button 
-              onClick={() => {
-                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(items, null, 2));
-                const downloadAnchor = document.createElement('a');
-                downloadAnchor.setAttribute("href", dataStr);
-                downloadAnchor.setAttribute("download", `kiokushiyo_backup_${new Date().toISOString().slice(0,10)}.json`);
-                document.body.appendChild(downloadAnchor);
-                downloadAnchor.click();
-                downloadAnchor.remove();
-              }} 
-              style={{ ...btnStyle, backgroundColor: '#38a169', color: 'white' }}
-            >
-              📥 バックアップ保存
-            </button>
-
-            {/* ★ 復元（ファイル読み込み）ボタン */}
-            <label style={{ ...btnStyle, backgroundColor: '#d69e2e', color: 'white', display: 'inline-flex', alignItems: 'center', cursor: 'pointer', margin: 0 }}>
-              📤 復元
-              <input 
-                type="file" 
-                accept=".json" 
-                onChange={(e) => {
-                  if (e.target.files && e.target.files[0]) {
-                    const reader = new FileReader();
-                    reader.onload = (event) => {
-                      try {
-                        const parsed = JSON.parse(event.target?.result as string);
-                        if (Array.isArray(parsed) && window.confirm('現在のデータを上書きして復元しますか？')) {
-                          setItems(parsed);
-                          alert('復元が完了しました！');
-                        }
-                      } catch {
-                        alert('正しいバックアップファイル（JSON）を選択してください。');
-                      }
-                    };
-                    reader.readAsText(e.target.files[0]);
-                  }
-                  e.target.value = ''; // 同じファイルを連続で選べるようにリセット
-                }} 
-                style={{ display: 'none' }} 
-              />
-            </label>
-          </div>
-
-          <div onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('itemId'); setItems(items.map(item => item.id === id ? { ...item, parentId: null } : item)); setDragOverRoomId(null) }} onDragOver={(e) => e.preventDefault()} style={{ minHeight: '400px', backgroundColor: isDarkMode ? '#2d3748' : '#f7fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-            <div onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverRoomId(null); const draggedId = e.dataTransfer.getData('itemId'); if(!draggedId)return; const draggedIndex = items.findIndex(i => i.id === draggedId); const draggedItem = items[draggedIndex]; const newItems = [...items]; newItems.splice(draggedIndex, 1); draggedItem.parentId = null; newItems.unshift(draggedItem); setItems(newItems); }} onDragOver={(e) => { e.preventDefault(); setDragOverRoomId('root-top') }} onDragLeave={() => setDragOverRoomId(null)} style={{ padding: '8px', color: '#a0aec0', fontSize: '0.8rem', fontStyle: 'italic', borderBottom: dragOverRoomId === 'root-top' ? '3px solid #3182ce' : 'none' }}>↓ ここにドロップして一番上に移動</div>
-            
-            {/* ★ 階層化・フォルダ入れ・並び替えを復活させた部分 */}
-            {(() => {
+          {/* ★ 部屋ごとの描画を共通化する関数 */}
+          {(() => {
+            const renderRoomSection = (title: string, bgColor: string, titleColor: string, targetItems: AppItem[], setTargetItems: any, listType: string, backupName: string) => {
               const renderTree = (parentId: string | null, level: number = 0) => {
-                return items.filter(i => i.parentId === parentId).map(item => (
+                return targetItems.filter(i => i.parentId === parentId).map(item => (
                   <div key={item.id} style={{ marginLeft: level > 0 ? '24px' : '0', marginTop: '8px' }}>
-                    <div draggable={editingItemId !== item.id} onDragStart={(e) => { e.dataTransfer.setData('itemId', item.id); e.stopPropagation() }} onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverRoomId(null); const draggedId = e.dataTransfer.getData('itemId'); if(draggedId === item.id) return; let currentParent: string | null = item.id; while(currentParent){ if(currentParent === draggedId) return; currentParent = items.find(i=>i.id === currentParent)?.parentId || null; } const draggedIndex = items.findIndex(i => i.id === draggedId); const draggedItem = items[draggedIndex]; const newItems = [...items]; newItems.splice(draggedIndex, 1); const targetItem = newItems.find(i => i.id === item.id); if(targetItem){ draggedItem.parentId = targetItem.parentId; const targetIndex = newItems.findIndex(i => i.id === item.id); newItems.splice(targetIndex + 1, 0, draggedItem); } setItems(newItems); }} onDragOver={(e) => { e.preventDefault(); setDragOverRoomId(item.id) }} onDragLeave={() => setDragOverRoomId(null)} onClick={() => { if (item.type === 'file' && editingItemId !== item.id) { setActiveFileId(item.id); setCurrentScreen('editor') } }} 
+                    <div draggable={editingItemId !== item.id} onDragStart={(e) => { e.dataTransfer.setData('itemId', item.id); e.dataTransfer.setData('listType', listType); e.stopPropagation() }} onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverRoomId(null); const draggedId = e.dataTransfer.getData('itemId'); const srcList = e.dataTransfer.getData('listType'); if(!draggedId || srcList !== listType || draggedId === item.id) return; let currentParent: string | null = item.id; while(currentParent){ if(currentParent === draggedId) return; currentParent = targetItems.find(i=>i.id === currentParent)?.parentId || null; } const draggedIndex = targetItems.findIndex(i => i.id === draggedId); const draggedItem = targetItems[draggedIndex]; const newItems = [...targetItems]; newItems.splice(draggedIndex, 1); const targetItem = newItems.find(i => i.id === item.id); if(targetItem){ draggedItem.parentId = targetItem.parentId; const targetIndex = newItems.findIndex(i => i.id === item.id); newItems.splice(targetIndex + 1, 0, draggedItem); } setTargetItems(newItems); }} onDragOver={(e) => { e.preventDefault(); setDragOverRoomId(`${listType}-${item.id}`) }} onDragLeave={() => setDragOverRoomId(null)} onClick={() => { if (item.type === 'file' && editingItemId !== item.id) { setActiveFileId(item.id); setCurrentScreen('editor') } }} 
                       style={{ padding: '12px 16px', border: '1px solid #cbd5e0', borderRadius: '6px', 
                         backgroundColor: item.type === 'folder' ? '#edf2f7' : '#ffffff', color: '#2d3748', 
-                        cursor: editingItemId === item.id ? 'text' : (item.type === 'file' ? 'pointer' : 'grab'), display: 'flex', alignItems: 'center', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', fontWeight: item.type === 'folder' ? 'bold' : 'normal', borderBottom: dragOverRoomId === item.id ? '3px solid #3182ce' : '1px solid #cbd5e0' }}>
+                        cursor: editingItemId === item.id ? 'text' : (item.type === 'file' ? 'pointer' : 'grab'), display: 'flex', alignItems: 'center', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', fontWeight: item.type === 'folder' ? 'bold' : 'normal', borderBottom: dragOverRoomId === `${listType}-${item.id}` ? '3px solid #3182ce' : '1px solid #cbd5e0' }}>
                       <span style={{ marginRight: '8px', fontSize: '1.2rem' }}>{item.type === 'folder' ? '📁' : '📄'}</span>
-                      {editingItemId === item.id ? <input autoFocus defaultValue={item.name} onBlur={(e) => { setItems(items.map(i => i.id === item.id ? { ...i, name: e.target.value } : i)); setEditingItemId(null) }} onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; if (e.key === 'Enter') { setItems(items.map(i => i.id === item.id ? { ...i, name: e.currentTarget.value } : i)); setEditingItemId(null) } }} onClick={(e) => e.stopPropagation()} style={{ fontSize: '1rem', padding: '4px', borderRadius: '4px', border: '2px solid #3182ce', outline: 'none', color: '#2d3748' }} /> : <span onDoubleClick={(e) => { e.stopPropagation(); setEditingItemId(item.id) }} style={{ flexGrow: 1 }}>{item.name}</span>}
+                      {editingItemId === item.id ? <input autoFocus defaultValue={item.name} onBlur={(e) => { setTargetItems(targetItems.map(i => i.id === item.id ? { ...i, name: e.target.value } : i)); setEditingItemId(null) }} onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; if (e.key === 'Enter') { setTargetItems(targetItems.map(i => i.id === item.id ? { ...i, name: e.currentTarget.value } : i)); setEditingItemId(null) } }} onClick={(e) => e.stopPropagation()} style={{ fontSize: '1rem', padding: '4px', borderRadius: '4px', border: '2px solid #3182ce', outline: 'none', color: '#2d3748' }} /> : <span onDoubleClick={(e) => { e.stopPropagation(); setEditingItemId(item.id) }} style={{ flexGrow: 1 }}>{item.name}</span>}
                       
                       {isRoomDeleteMode && (
                         <button
@@ -864,9 +831,9 @@ export default function App() {
                               let currentSize = 0;
                               while (idsToDelete.size > currentSize) {
                                 currentSize = idsToDelete.size;
-                                items.forEach(i => { if (i.parentId && idsToDelete.has(i.parentId)) idsToDelete.add(i.id); });
+                                targetItems.forEach(i => { if (i.parentId && idsToDelete.has(i.parentId)) idsToDelete.add(i.id); });
                               }
-                              setItems(items.filter(i => !idsToDelete.has(i.id)));
+                              setTargetItems(targetItems.filter(i => !idsToDelete.has(i.id)));
                             }
                           }}
                           style={{ marginLeft: '10px', backgroundColor: '#fff', color: '#e53e3e', border: '2px solid #e53e3e', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', flexShrink: 0 }}
@@ -875,15 +842,66 @@ export default function App() {
                         </button>
                       )}
                     </div>
-                    {item.type === 'folder' && <div style={{ borderLeft: '2px dashed #cbd5e0', marginLeft: '12px', paddingLeft: '4px' }}>{renderTree(item.id, level + 1)}<div onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverRoomId(null); const draggedId = e.dataTransfer.getData('itemId'); if(draggedId === item.id) return; let currentParent: string | null = item.id; while(currentParent){ if(currentParent === draggedId) return; currentParent = items.find(i=>i.id === currentParent)?.parentId || null; } const draggedIndex = items.findIndex(i => i.id === draggedId); const draggedItem = items[draggedIndex]; const newItems = [...items]; newItems.splice(draggedIndex, 1); draggedItem.parentId = item.id; newItems.push(draggedItem); setItems(newItems); }} onDragOver={(e) => { e.preventDefault(); setDragOverRoomId(`empty-${item.id}`) }} onDragLeave={() => setDragOverRoomId(null)} style={{ padding: '8px', color: '#a0aec0', fontSize: '0.8rem', fontStyle: 'italic', borderBottom: dragOverRoomId === `empty-${item.id}` ? '3px solid #3182ce' : 'none' }}>↓ ここにドロップしてフォルダの中に入れる</div></div>}
+                    {item.type === 'folder' && <div style={{ borderLeft: '2px dashed #cbd5e0', marginLeft: '12px', paddingLeft: '4px' }}>{renderTree(item.id, level + 1)}<div onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverRoomId(null); const draggedId = e.dataTransfer.getData('itemId'); const srcList = e.dataTransfer.getData('listType'); if(!draggedId || srcList !== listType || draggedId === item.id) return; let currentParent: string | null = item.id; while(currentParent){ if(currentParent === draggedId) return; currentParent = targetItems.find(i=>i.id === currentParent)?.parentId || null; } const draggedIndex = targetItems.findIndex(i => i.id === draggedId); const draggedItem = targetItems[draggedIndex]; const newItems = [...targetItems]; newItems.splice(draggedIndex, 1); draggedItem.parentId = item.id; newItems.push(draggedItem); setTargetItems(newItems); }} onDragOver={(e) => { e.preventDefault(); setDragOverRoomId(`${listType}-empty-${item.id}`) }} onDragLeave={() => setDragOverRoomId(null)} style={{ padding: '8px', color: '#a0aec0', fontSize: '0.8rem', fontStyle: 'italic', borderBottom: dragOverRoomId === `${listType}-empty-${item.id}` ? '3px solid #3182ce' : 'none' }}>↓ ここにドロップしてフォルダの中に入れる</div></div>}
                   </div>
-                ))
-              }
-              return renderTree(null);
-            })()}
-          </div>
+                ));
+              };
+
+              return (
+                <div style={{ backgroundColor: isDarkMode ? '#2d3748' : bgColor, padding: '20px', borderRadius: '8px', border: `1px solid ${titleColor}`, marginBottom: '30px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', gap: '10px' }}>
+                    <h2 style={{ margin: 0, fontSize: '1.4rem', color: isDarkMode ? '#e2e8f0' : titleColor }}>{title}</h2>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <button onClick={() => setTargetItems([...targetItems, { id: `file-${Date.now()}`, type: 'file', name: '新規ファイル', parentId: null, cards: [] }])} style={miniBtnStyle}>＋ 新規ファイル</button>
+                      <button onClick={() => setTargetItems([...targetItems, { id: `folder-${Date.now()}`, type: 'folder', name: '新規フォルダ', parentId: null, cards: [] }])} style={miniBtnStyle}>＋ 新規フォルダ</button>
+                      <button onClick={() => {
+                        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(targetItems, null, 2));
+                        const downloadAnchor = document.createElement('a');
+                        downloadAnchor.setAttribute("href", dataStr);
+                        downloadAnchor.setAttribute("download", `kiokushiyo_${backupName}_${new Date().toISOString().slice(0,10)}.json`);
+                        document.body.appendChild(downloadAnchor);
+                        downloadAnchor.click();
+                        downloadAnchor.remove();
+                      }} style={{ ...miniBtnStyle, backgroundColor: '#38a169', color: 'white', border: 'none' }}>📥 バックアップ</button>
+                      <label style={{ ...miniBtnStyle, backgroundColor: '#d69e2e', color: 'white', border: 'none', display: 'inline-flex', alignItems: 'center', cursor: 'pointer', margin: 0 }}>
+                        📤 復元
+                        <input type="file" accept=".json" onChange={(e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            const reader = new FileReader();
+                            reader.onload = (event) => {
+                              try {
+                                const parsed = JSON.parse(event.target?.result as string);
+                                if (Array.isArray(parsed) && window.confirm(`${title}のデータを上書きして復元しますか？`)) {
+                                  setTargetItems(parsed);
+                                  alert('復元が完了しました！');
+                                }
+                              } catch { alert('正しいバックアップファイル（JSON）を選択してください。'); }
+                            };
+                            reader.readAsText(e.target.files[0]);
+                          }
+                          e.target.value = ''; 
+                        }} style={{ display: 'none' }} />
+                      </label>
+                    </div>
+                  </div>
+                  
+                  <div onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('itemId'); const srcList = e.dataTransfer.getData('listType'); if(srcList === listType) { setTargetItems(targetItems.map(item => item.id === id ? { ...item, parentId: null } : item)); } setDragOverRoomId(null) }} onDragOver={(e) => e.preventDefault()} style={{ minHeight: '250px', backgroundColor: isDarkMode ? '#1a202c' : '#ffffff', padding: '15px', borderRadius: '6px', border: '1px dashed #cbd5e0' }}>
+                    <div onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverRoomId(null); const draggedId = e.dataTransfer.getData('itemId'); const srcList = e.dataTransfer.getData('listType'); if(!draggedId || srcList !== listType)return; const draggedIndex = targetItems.findIndex(i => i.id === draggedId); const draggedItem = targetItems[draggedIndex]; const newItems = [...targetItems]; newItems.splice(draggedIndex, 1); draggedItem.parentId = null; newItems.unshift(draggedItem); setTargetItems(newItems); }} onDragOver={(e) => { e.preventDefault(); setDragOverRoomId(`${listType}-root-top`) }} onDragLeave={() => setDragOverRoomId(null)} style={{ padding: '8px', color: '#a0aec0', fontSize: '0.8rem', fontStyle: 'italic', borderBottom: dragOverRoomId === `${listType}-root-top` ? '3px solid #3182ce' : 'none' }}>↓ ここにドロップして一番上に移動</div>
+                    {renderTree(null)}
+                  </div>
+                </div>
+              );
+            };
+
+            return (
+              <>
+                {renderRoomSection('☁️ クラウド部屋 (Supabase)', '#ebf8ff', '#2b6cb0', items, setItems, 'cloud', 'cloud_backup')}
+                {renderRoomSection('💻 ローカル部屋 (この端末のみ)', '#e6fffa', '#319795', localItems, setLocalItems, 'local', 'local_backup')}
+              </>
+            );
+          })()}
         </div>
-      ) : 
+      ) :
 
       // --- エディタ画面 ---
       (
@@ -891,7 +909,7 @@ export default function App() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', gap: '10px', flexWrap: 'wrap' }}>
             <button onClick={() => setCurrentScreen('room')} style={{ ...btnStyle, backgroundColor: '#e2e8f0' }}>← 部屋に戻る</button>
             {editingItemId === activeFileId ? (
-  <input autoFocus defaultValue={activeFile?.name} onBlur={(e) => { setItems(items.map(i => i.id === activeFileId ? { ...i, name: e.target.value } : i)); setEditingItemId(null) }} onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; if (e.key === 'Enter') { setItems(items.map(i => i.id === activeFileId ? { ...i, name: e.currentTarget.value } : i)); setEditingItemId(null) } }} style={{ fontSize: '1.5rem', fontWeight: 900, padding: '4px', borderRadius: '4px', border: '2px solid #3182ce', outline: 'none', maxWidth: '200px', color: '#2d3748', fontFamily: '"Zen Maru Gothic", sans-serif' }} />
+  <input autoFocus defaultValue={activeFile?.name} onBlur={(e) => { updateActiveFile(i => ({ ...i, name: e.target.value })); setEditingItemId(null) }} onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; if (e.key === 'Enter') { updateActiveFile(i => ({ ...i, name: e.currentTarget.value })); setEditingItemId(null) } }} style={{ fontSize: '1.5rem', fontWeight: 900, padding: '4px', borderRadius: '4px', border: '2px solid #3182ce', outline: 'none', maxWidth: '200px', color: '#2d3748', fontFamily: '"Zen Maru Gothic", sans-serif' }} />
 ) : (
               <h1 onDoubleClick={() => setEditingItemId(activeFileId)} style={{ margin: 0, fontSize: '1.8rem', cursor: 'text', wordBreak: 'break-all', color: isDarkMode ? '#ffffff' : '#2d3748', fontFamily: '"Zen Maru Gothic", sans-serif', fontWeight: 900 }} title="ダブルクリックで名前を変更">{activeFile?.name}</h1>
             )}
@@ -1352,14 +1370,19 @@ export default function App() {
                     }
 
                     if (!qHTML.trim() && !aHTML.trim() && qImages.length === 0 && aImages.length === 0) return alert('入力してください。')
-                    if (editingCardId) { setItems(items.map(i => i.id === activeFileId ? { ...i, cards: i.cards.map(c => c.id === editingCardId ? { ...c, question: qHTML, answer: aHTML, qImages: [...qImages], aImages: [...aImages], fontSize } : c) } : i)); setEditingCardId(null); setIsExpanded(false); }
-                    else { const newCard: Card = { id: Date.now().toString(), question: qHTML, answer: aHTML, qImages: [...qImages], aImages: [...aImages], fontSize }; setItems(items.map(i => i.id === activeFileId ? { ...i, cards: [...i.cards, newCard] } : i)) }
+                    if (editingCardId) { 
+                      updateActiveFile(i => ({ ...i, cards: i.cards.map(c => c.id === editingCardId ? { ...c, question: qHTML, answer: aHTML, qImages: [...qImages], aImages: [...aImages], fontSize } : c) })); 
+                      setEditingCardId(null); setIsExpanded(false); 
+                    } else { 
+                      const newCard: Card = { id: Date.now().toString(), question: qHTML, answer: aHTML, qImages: [...qImages], aImages: [...aImages], fontSize }; 
+                      updateActiveFile(i => ({ ...i, cards: [...i.cards, newCard] })); 
+                    }
                     if (questionRef.current) questionRef.current.innerHTML = ''; if (answerRef.current) answerRef.current.innerHTML = ''; setQImages([]); setAImages([])
                   }} style={{ ...btnStyle, backgroundColor: editingCardId ? '#d69e2e' : '#3182ce', color: 'white', width: '100%', padding: '10px', marginTop: '15px' }}>{editingCardId ? '更新する' : 'カードを追加'}</button>
                 </div>
               )}
 
-              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => { const { active, over } = e; if (over && active.id !== over.id && activeFile) { const updatedCards = arrayMove(activeFile.cards, activeFile.cards.findIndex(c => c.id === active.id), activeFile.cards.findIndex(c => c.id === over.id)); setItems(items.map(i => i.id === activeFile.id ? { ...i, cards: updatedCards } : i)) } }}>
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => { const { active, over } = e; if (over && active.id !== over.id && activeFile) { const updatedCards = arrayMove(activeFile.cards, activeFile.cards.findIndex(c => c.id === active.id), activeFile.cards.findIndex(c => c.id === over.id)); updateActiveFile(i => ({ ...i, cards: updatedCards })); } }}>
                 <SortableContext items={activeFile?.cards.map(c => c.id) || []} strategy={verticalListSortingStrategy}>
                   {/* ★ スマホで閲覧・テスト中は横スクロール（スワイプ）にする */}
                   <div style={
@@ -1376,7 +1399,7 @@ export default function App() {
                     }
                   }>
                     {/* ★ 不要になった onUpdate と fontSize を削除しました */}
-                    {activeFile?.cards.map((card, index) => <SortableCard key={card.id} card={card} index={index + 1} isTestMode={isTestMode} isEditMode={isEditMode} isMobileView={isMobileView} isCardExpanded={isGlobalCardsExpanded} onToggleExpand={() => setIsGlobalCardsExpanded(!isGlobalCardsExpanded)} onDelete={(id) => setItems(items.map(i => i.id === activeFileId ? { ...i, cards: i.cards.filter(c => c.id !== id) } : i))} onEdit={(c)=>{ setEditingCardId(c.id); setFontSize(c.fontSize || 16); if (questionRef.current) questionRef.current.innerHTML = c.question; if (answerRef.current) answerRef.current.innerHTML = c.answer; setQImages([...c.qImages]); setAImages([...c.aImages]); window.scrollTo({ top: 0, behavior: 'smooth' }); setIsGlobalCardsExpanded(false); }} />)}
+                    {activeFile?.cards.map((card, index) => <SortableCard key={card.id} card={card} index={index + 1} isTestMode={isTestMode} isEditMode={isEditMode} isMobileView={isMobileView} isCardExpanded={isGlobalCardsExpanded} onToggleExpand={() => setIsGlobalCardsExpanded(!isGlobalCardsExpanded)} onDelete={(id) => updateActiveFile(i => ({ ...i, cards: i.cards.filter(c => c.id !== id) }))} onEdit={(c)=>{ setEditingCardId(c.id); setFontSize(c.fontSize || 16); if (questionRef.current) questionRef.current.innerHTML = c.question; if (answerRef.current) answerRef.current.innerHTML = c.answer; setQImages([...c.qImages]); setAImages([...c.aImages]); window.scrollTo({ top: 0, behavior: 'smooth' }); setIsGlobalCardsExpanded(false); }} />)}
                   </div>
                 </SortableContext>
               </DndContext>
