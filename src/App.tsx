@@ -1024,8 +1024,6 @@ export default function App() {
                                           onMouseDown={(e) => { 
                                             if (isWordDeleteMode) {
                                               setWordItems(wordItems.filter(w => w.id !== word.id)); 
-                                            } else {
-                                              e.preventDefault(); 
                                             }
                                           }}
                                           style={{ width: isBlock ? '100%' : 'auto', textAlign: 'left', padding: '6px 12px', borderRadius: word.type === 'folder' ? '6px' : '20px', borderTop: isTop ? '3px solid #3182ce' : '1px solid #cbd5e0', borderBottom: isBottom ? '3px solid #3182ce' : '1px solid #cbd5e0', borderLeft: isLeft ? '3px solid #3182ce' : '1px solid #cbd5e0', borderRight: isRight ? '3px solid #3182ce' : '1px solid #cbd5e0', outline: (isWordBulkMode && selectedWordIds.includes(word.id)) ? '3px solid #ed8936' : 'none', outlineOffset: '-1px', backgroundColor: isInside ? '#ebf8ff' : word.bgColor, color: word.textColor, cursor: isWordDeleteMode ? 'pointer' : (word.type === 'folder' ? 'pointer' : 'grab'), fontWeight: 'bold', fontSize: '1rem', transition: 'all 0.1s', display: 'flex', alignItems: 'center', gap: '5px', boxSizing: 'border-box' }}
