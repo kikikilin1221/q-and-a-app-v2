@@ -337,14 +337,29 @@ export default function App() {
       }, 0);
       return;
     }
+
+    // ★ カーソルが外れている場合、最後に記憶した位置を復元し、強制的にフォーカスを当てる
     if (lastRangeRef.current) {
       const sel = window.getSelection();
       sel?.removeAllRanges();
       sel?.addRange(lastRangeRef.current);
+      
+      if (questionRef.current?.contains(lastRangeRef.current.commonAncestorContainer)) {
+        questionRef.current.focus();
+      } else if (answerRef.current?.contains(lastRangeRef.current.commonAncestorContainer)) {
+        answerRef.current.focus();
+      }
     }
+
     const sel = window.getSelection();
     if (sel && sel.rangeCount > 0) {
       const range = sel.getRangeAt(0);
+      
+      // ★ QAボックス内にカーソルがあるか最終確認
+      if (!questionRef.current?.contains(range.commonAncestorContainer) && !answerRef.current?.contains(range.commonAncestorContainer)) {
+        return; // QAボックス外なら挿入しない
+      }
+
       range.deleteContents();
       const span = document.createElement('span');
       span.style.backgroundColor = word.bgColor;
@@ -481,15 +496,20 @@ export default function App() {
     let newText = originalText;
     const offset = range.startOffset;
 
-    const parent = textNode.parentNode;
-    if (parent && parent.firstChild === textNode) {
-      newText = newText.replace(/^[a-z]/, (match) => match.toUpperCase());
+    // ① 左端（文頭）の英文字を自動大文字化
+    // 前に文字がない、または改行(BR)や段落(DIV)の直後の場合に適用
+    if (!textNode.previousSibling || textNode.previousSibling.nodeName === 'BR' || textNode.previousSibling.nodeName === 'DIV') {
+      newText = newText.replace(/^[\s ]*([a-z])/g, (match) => match.toUpperCase());
     }
-    newText = newText.replace(/(^|\s)i(\s)$/, '$1I$2');
+
+    // ② 独立した「i」を「I」に変換
+    // 単語の一部ではない 'i' (前後に空白や句読点、または文頭・文末のとき)
+    newText = newText.replace(/(^|[\s ])i(?=[\s ]|$|[.,?!;:\)\]}])/g, '$1I');
 
     if (newText !== originalText) {
       textNode.nodeValue = newText;
       try {
+        // 文字列長は変わらないので、同じ位置にカーソルを戻す
         range.setStart(textNode, offset);
         range.setEnd(textNode, offset);
         sel.removeAllRanges();
