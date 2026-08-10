@@ -313,20 +313,25 @@ export default function App() {
   const [isEnglishMode, setIsEnglishMode] = useState(false)
   const [engWord, setEngWord] = useState('')
   const [engPhonetic, setEngPhonetic] = useState('')
-  const [engSuggestions, setEngSuggestions] = useState<string[]>([]) // ★ 追加: 検索候補の保存用
+  const [engSuggestions, setEngSuggestions] = useState<string[]>([]) 
+
+  // ★ ここから追加：ボックス内の英単語サジェスト用ステート
+  const [boxSuggestions, setBoxSuggestions] = useState<string[]>([])
+  const [suggestionPos, setSuggestionPos] = useState<{top: number, left: number} | null>(null)
+  const [typingWordInfo, setTypingWordInfo] = useState<{word: string, node: Node, startOffset: number, endOffset: number} | null>(null)
+  // ★ ここまで
 
   // ★ 一括選択用のステートとユーティリティ
   const [isWordBulkMode, setIsWordBulkMode] = useState(false)
   const [selectedWordIds, setSelectedWordIds] = useState<string[]>([])
   const [lastClickedWordId, setLastClickedWordId] = useState<string | null>(null)
 
-  // ★ 英単語の予測変換（サジェスト）を外部APIから取得する処理
+  // ★ 英単語モード入力欄の予測変換（サジェスト）を取得する処理
   useEffect(() => {
     if (!isEnglishMode || !engWord.trim()) {
       setEngSuggestions([]);
       return;
     }
-    // 入力中（タイピング中）は通信を控え、少し手が止まったら取得する（デバウンス処理）
     const timer = setTimeout(async () => {
       try {
         const res = await fetch(`https://api.datamuse.com/sug?s=${engWord.trim()}`);
@@ -338,6 +343,24 @@ export default function App() {
     }, 300); 
     return () => clearTimeout(timer);
   }, [engWord, isEnglishMode]);
+
+  // ★ ボックス入力中の予測変換（サジェスト）を取得する処理
+  useEffect(() => {
+    if (!typingWordInfo || !typingWordInfo.word) {
+      setBoxSuggestions([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`https://api.datamuse.com/sug?s=${typingWordInfo.word}`);
+        if (res.ok) {
+          const data = await res.json();
+          setBoxSuggestions(data.map((d: any) => d.word));
+        }
+      } catch (e) {}
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [typingWordInfo?.word]);
 
   // 開いているフォルダを展開した「見た目順」のIDリストを取得する（範囲選択用）
   const getFlattenedVisibleWordIds = (parentId: string | null = null): string[] => {
@@ -517,8 +540,33 @@ export default function App() {
     }
   };
 
-// ★ 自動大文字化＆単独「i」の「I」変換処理 (精度向上版)
-  const handleAutoFormat = () => {
+// ★ ボックス用サジェストをクリックして適用する処理
+  const applyBoxSuggestion = (suggestion: string) => {
+    if (!typingWordInfo) return;
+    const { node, startOffset, endOffset } = typingWordInfo;
+    const text = node.nodeValue || '';
+    const newText = text.slice(0, startOffset) + suggestion + text.slice(endOffset);
+    node.nodeValue = newText;
+
+    // カーソルを挿入した単語の後ろに戻す
+    const sel = window.getSelection();
+    const newRange = document.createRange();
+    const newCursorPos = startOffset + suggestion.length;
+    try {
+      newRange.setStart(node, newCursorPos);
+      newRange.setEnd(node, newCursorPos);
+      sel?.removeAllRanges();
+      sel?.addRange(newRange);
+    } catch(e) {}
+
+    setSuggestionPos(null);
+    setBoxSuggestions([]);
+    setTypingWordInfo(null);
+    saveCursorPosition();
+  };
+
+  // ★ ボックス入力時の総合処理（自動大文字化＋カーソル記憶＋予測変換サジェスト）
+  const handleBoxInput = () => {
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0) return;
     const range = sel.getRangeAt(0);
@@ -529,7 +577,7 @@ export default function App() {
     let newText = originalText;
     const offset = range.startOffset;
 
-    // ① 左端（文頭）の英文字を自動大文字化
+    // --- ① 自動大文字化 ---
     let isBlockStart = false;
     let node: Node | null = textNode;
     while (node && node.nodeName !== 'DIV' && !(node as Element).classList?.contains('rich-text-content')) {
@@ -555,18 +603,48 @@ export default function App() {
       newText = newText.replace(/^[\s ]*([a-z])/, (match) => match.toUpperCase());
     }
 
-    // ② 独立した「i」を「I」に変換
     newText = newText.replace(/(^|[\s ])i(?=[\s .,?!;:\)\]}])/g, '$1I');
 
     if (newText !== originalText) {
       textNode.nodeValue = newText;
       try {
-        // 文字列長は変わらないので、同じ位置にカーソルを戻す
         range.setStart(textNode, offset);
         range.setEnd(textNode, offset);
         sel.removeAllRanges();
         sel.addRange(range);
       } catch(err) {}
+    }
+
+    // --- ② カーソル位置記憶 ---
+    saveCursorPosition();
+
+    // --- ③ 英単語の入力検知とサジェスト呼び出し ---
+    const currentSel = window.getSelection();
+    if (!currentSel || currentSel.rangeCount === 0) return;
+    const currentRange = currentSel.getRangeAt(0);
+    if (currentRange.startContainer.nodeType !== Node.TEXT_NODE) {
+      setSuggestionPos(null);
+      return;
+    }
+
+    const text = currentRange.startContainer.nodeValue || '';
+    const currentOffset = currentRange.startOffset;
+    const textBeforeCursor = text.slice(0, currentOffset);
+    // カーソルの直前にある英文字の連続を抽出
+    const match = textBeforeCursor.match(/[a-zA-Z]+$/);
+
+    if (match) {
+      const word = match[0];
+      if (word.length >= 2) { // 2文字以上入力したらサジェスト起動
+        const rect = currentRange.getBoundingClientRect();
+        // 入力中の文字の真下にポップアップを配置する
+        setSuggestionPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX });
+        setTypingWordInfo({ word, node: currentRange.startContainer, startOffset: currentOffset - word.length, endOffset: currentOffset });
+      } else {
+        setSuggestionPos(null);
+      }
+    } else {
+      setSuggestionPos(null);
     }
   };
 
@@ -1143,8 +1221,7 @@ export default function App() {
                           </div>
                         )}
                         {renderNewImages(qImages, true)}
-                        {/* ★ ここで handleAutoFormat を onInput で呼び出すように設定！ */}
-                        <div ref={questionRef} contentEditable onInput={() => { handleAutoFormat(); saveCursorPosition(); }} onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, true)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre', color: '#000000', minWidth: 'min-content' }} />
+                        <div ref={questionRef} contentEditable onInput={handleBoxInput} onBlur={() => setTimeout(() => setSuggestionPos(null), 200)} onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, true)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre', color: '#000000', minWidth: 'min-content' }} />
                       </div>
                     </div>
                     
@@ -1156,8 +1233,7 @@ export default function App() {
                       </div>
                       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '10px', position: 'relative', overflow: 'auto' }}>
                         {renderNewImages(aImages, false)}
-                        {/* ★ ここで handleAutoFormat を onInput で呼び出すように設定！ */}
-                        <div ref={answerRef} contentEditable onInput={() => { handleAutoFormat(); saveCursorPosition(); }} onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, false)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre', color: '#000000', minWidth: 'min-content' }} />
+                        <div ref={answerRef} contentEditable onInput={handleBoxInput} onBlur={() => setTimeout(() => setSuggestionPos(null), 200)} onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, false)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre', color: '#000000', minWidth: 'min-content' }} />
                       </div>
                     </div>
                   </div>
@@ -1308,6 +1384,18 @@ export default function App() {
           </div>
         </div>
       )}
+      
+      {/* ★ ボックス入力中の英単語サジェスト（予測変換）UI */}
+      {suggestionPos && boxSuggestions.length > 0 && (
+        <div style={{ position: 'absolute', top: suggestionPos.top + 5, left: suggestionPos.left, backgroundColor: '#fff', border: '1px solid #cbd5e0', borderRadius: '6px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 20000, maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', minWidth: '150px' }}>
+          {boxSuggestions.map((sug, idx) => (
+            <div key={idx} onMouseDown={(e) => { e.preventDefault(); applyBoxSuggestion(sug); }} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: idx !== boxSuggestions.length - 1 ? '1px solid #edf2f7' : 'none', color: '#2b6cb0', fontWeight: 'bold', fontSize: '1rem' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#ebf8ff'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+              {sug}
+            </div>
+          ))}
+        </div>
+      )}
+
     </div>
   )
 }
