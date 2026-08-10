@@ -285,7 +285,6 @@ export default function App() {
   const lastRangeRef = useRef<Range | null>(null);
   const [isDraggingWord, setIsDraggingWord] = useState(false);
   
-  // 【変更後】
   const [isEnglishMode, setIsEnglishMode] = useState(false)
   const [engWord, setEngWord] = useState('')
   const [engPhonetic, setEngPhonetic] = useState('')
@@ -839,7 +838,6 @@ export default function App() {
 
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
                           <strong style={{ color: '#4a5568' }}>ワード一覧（タップで挿入）</strong>
-                          // 【変更後】
                           <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                             <form onSubmit={(e) => { e.preventDefault(); if (newWordText.trim()) { setWordItems([...wordItems, { id: `word-${Date.now()}`, type: 'word', text: newWordText.trim(), bgColor: '#bee3f8', textColor: '#2b6cb0', parentId: null, isOpen: true }]); setNewWordText(''); } }} style={{ display: 'flex', gap: '4px' }}>
                               <input type="text" value={newWordText} onChange={(e) => setNewWordText(e.target.value)} placeholder="新しいワードを入力..." style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #cbd5e0', fontSize: '0.9rem', outline: 'none' }} />
@@ -851,8 +849,8 @@ export default function App() {
                           </div>
                         </div>
                         
-                        // 【変更後】
-                        <div onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverWordId(null); const draggedIdsStr = e.dataTransfer.getData('draggedWordIds'); if(!draggedIdsStr) return; const draggedIds: string[] = JSON.parse(draggedIdsStr); let newWords = [...wordItems]; const draggedItems = draggedIds.map(id => newWords.find(w => w.id === id)).filter(Boolean) as WordItem[]; newWords = newWords.filter(w => !draggedIds.includes(w.id)); draggedItems.forEach(item => item.parentId = null); newWords.unshift(...draggedItems); setWordItems(newWords); }} onDragOver={(e) => { e.preventDefault(); setDragOverWordId('root-top'); }} onDragLeave={() => setDragOverWordId(null)} style={{ padding: '8px', color: '#a0aec0', fontSize: '0.8rem', fontStyle: 'italic', borderBottom: dragOverWordId === 'root-top' ? '3px solid #3182ce' : 'none' }}>
+                        
+                        <div onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverWordId(null); const draggedIdsStr = e.dataTransfer.getData('draggedWordIds'); if(!draggedIdsStr) return; const draggedIds: string[] = JSON.parse(draggedIdsStr); let newWords = [...wordItems]; const draggedItems = draggedIds.map(id => newWords.find(w => w.id === id)).filter(Boolean) as WordItem[]; newWords = newWords.filter(w => !draggedIds.includes(w.id)); draggedItems.forEach(item => item.parentId = null); newWords.unshift(...draggedItems); setWordItems(newWords); setSelectedWordIds([]); setLastClickedWordId(null); }} onDragOver={(e) => { e.preventDefault(); setDragOverWordId('root-top'); }} onDragLeave={() => setDragOverWordId(null)} style={{ padding: '8px', color: '#a0aec0', fontSize: '0.8rem', fontStyle: 'italic', borderBottom: dragOverWordId === 'root-top' ? '3px solid #3182ce' : 'none' }}>
                           ↓ ここにドロップしてフォルダから出す・一番上に移動
                         </div>
 
@@ -874,7 +872,6 @@ export default function App() {
                                     const isRight = dragOverWordId === `${word.id}-right`;
                                     const isInside = dragOverWordId === `${word.id}-inside`;
 
-                                    // 【変更後】
                                     return (
                                     <div key={word.id} style={{ display: 'flex', flexDirection: 'column', width: isBlock ? '100%' : 'auto' }}>
                                       <div style={{ position: 'relative', display: 'flex', width: '100%' }}>
@@ -903,6 +900,9 @@ export default function App() {
                                               }
                                             });
                                             setWordItems(newWords);
+                                            // ★ 追加：ドロップ後に選択状態をクリア
+                                            setSelectedWordIds([]);
+                                            setLastClickedWordId(null);
                                           }}
                                           onDragOver={(e) => { 
                                             e.preventDefault(); e.stopPropagation(); 
