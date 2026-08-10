@@ -458,7 +458,7 @@ export default function App() {
 
   useEffect(() => { if (!isExpanded) setTempCreateFontSize(fontSize); }, [isExpanded, fontSize])
 
-  // ★ クリック時とキーボード入力時のみ静かにカーソル位置を記憶（再描画なし）
+ // ★ クリック時とキーボード入力時のみ静かにカーソル位置を記憶（再描画なし）
   const saveCursorPosition = () => {
     const sel = window.getSelection();
     if (sel && sel.rangeCount > 0) {
@@ -466,6 +466,35 @@ export default function App() {
       if (questionRef.current?.contains(r.commonAncestorContainer) || answerRef.current?.contains(r.commonAncestorContainer)) {
         lastRangeRef.current = r.cloneRange();
       }
+    }
+  };
+
+  // ★ 自動大文字化＆単独「i」の「I」変換処理
+  const handleAutoFormat = () => {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    if (range.startContainer.nodeType !== Node.TEXT_NODE) return;
+
+    const textNode = range.startContainer;
+    let originalText = textNode.nodeValue || '';
+    let newText = originalText;
+    const offset = range.startOffset;
+
+    const parent = textNode.parentNode;
+    if (parent && parent.firstChild === textNode) {
+      newText = newText.replace(/^[a-z]/, (match) => match.toUpperCase());
+    }
+    newText = newText.replace(/(^|\s)i(\s)$/, '$1I$2');
+
+    if (newText !== originalText) {
+      textNode.nodeValue = newText;
+      try {
+        range.setStart(textNode, offset);
+        range.setEnd(textNode, offset);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } catch(e) {}
     }
   };
 
@@ -955,7 +984,13 @@ export default function App() {
                                             }
                                             if (word.type === 'folder') { setWordItems(wordItems.map(w => w.id === word.id ? { ...w, isOpen: !w.isOpen } : w)); } else if (!isWordDeleteMode) { handleInsertWord(word); }
                                           }}
-                                          onMouseDown={(e) => { if (isWordDeleteMode) setWordItems(wordItems.filter(w => w.id !== word.id)); }}
+                                          onMouseDown={(e) => { 
+                                            if (isWordDeleteMode) {
+                                              setWordItems(wordItems.filter(w => w.id !== word.id)); 
+                                            } else {
+                                              e.preventDefault(); // ★ 追加：フォーカス消失を防ぎ、確実にカーソル位置を復活させる
+                                            }
+                                          }}
                                           style={{ width: isBlock ? '100%' : 'auto', textAlign: 'left', padding: '6px 12px', borderRadius: word.type === 'folder' ? '6px' : '20px', borderTop: isTop ? '3px solid #3182ce' : '1px solid #cbd5e0', borderBottom: isBottom ? '3px solid #3182ce' : '1px solid #cbd5e0', borderLeft: isLeft ? '3px solid #3182ce' : '1px solid #cbd5e0', borderRight: isRight ? '3px solid #3182ce' : '1px solid #cbd5e0', outline: (isWordBulkMode && selectedWordIds.includes(word.id)) ? '3px solid #ed8936' : 'none', outlineOffset: '-1px', backgroundColor: isInside ? '#ebf8ff' : word.bgColor, color: word.textColor, cursor: isWordDeleteMode ? 'pointer' : (word.type === 'folder' ? 'pointer' : 'grab'), fontWeight: 'bold', fontSize: '1rem', transition: 'all 0.1s', display: 'flex', alignItems: 'center', gap: '5px', boxSizing: 'border-box' }}
                                         >
                                           {word.type === 'folder' && <span>{word.isOpen ? '📂' : '📁'}</span>} {word.text}
