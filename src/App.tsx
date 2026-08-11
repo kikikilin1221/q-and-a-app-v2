@@ -619,13 +619,10 @@ export default function App() {
     saveCursorPosition();
   };
 
-  // ★ 追加：英単語入力欄用のキーボード操作
+  // ★ 変更：英単語入力欄用のキーボード操作（上下矢印で選択）
   const handleEngWordKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (suggestionTarget === 'engWord' && engSuggestions.length > 0) {
-      if (e.key === ' ' || e.code === 'Space' || e.key === 'Spacebar' || e.keyCode === 32) {
-        e.preventDefault();
-        setSelectedSuggestionIndex(prev => (prev + 1) % engSuggestions.length);
-      } else if (e.key === 'ArrowDown') {
+      if (e.key === 'ArrowDown') {
         e.preventDefault();
         setSelectedSuggestionIndex(prev => (prev + 1) % engSuggestions.length);
       } else if (e.key === 'ArrowUp') {
@@ -645,13 +642,10 @@ export default function App() {
     }
   };
 
-  // ★ 変更：キーボード（スペース・エンター・矢印キー）でQAボックスのサジェストを選択・確定する処理
+  // ★ 変更：キーボード（上下矢印・エンターキー）でQAボックスのサジェストを選択・確定する処理
   const handleBoxKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (suggestionTarget === 'box' && suggestionPos && boxSuggestions.length > 0) {
-      if (e.key === ' ' || e.code === 'Space' || e.key === 'Spacebar' || e.keyCode === 32) {
-        e.preventDefault();
-        setSelectedSuggestionIndex(prev => (prev + 1) % boxSuggestions.length);
-      } else if (e.key === 'ArrowDown') {
+      if (e.key === 'ArrowDown') {
         e.preventDefault();
         setSelectedSuggestionIndex(prev => (prev + 1) % boxSuggestions.length);
       } else if (e.key === 'ArrowUp') {
