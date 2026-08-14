@@ -282,7 +282,8 @@ export default function App() {
   
   const [editingCardId, setEditingCardId] = useState<string | null>(null)
   const [isMobileView, setIsMobileView] = useState(window.innerWidth <= 768);
-  const [isRoomDeleteMode, setIsRoomDeleteMode] = useState(false);
+  const [selectionMode, setSelectionMode] = useState<'cloud' | 'local' | null>(null); // ★ 追加: 選択モード（どの部屋で選択中か）
+  const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]); // ★ 追加: 選択された項目のIDリスト
   const [isGlobalCardsExpanded, setIsGlobalCardsExpanded] = useState(false); // ★ 追加
 
   useEffect(() => {
@@ -886,32 +887,23 @@ export default function App() {
               const renderTree = (parentId: string | null, level: number = 0) => {
                 return targetItems.filter(i => i.parentId === parentId).map(item => (
                   <div key={item.id} style={{ marginLeft: level > 0 ? '24px' : '0', marginTop: '8px' }}>
-                    <div draggable={editingItemId !== item.id} onDragStart={(e) => { e.dataTransfer.setData('itemId', item.id); e.dataTransfer.setData('listType', listType); e.stopPropagation() }} onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverRoomId(null); const draggedId = e.dataTransfer.getData('itemId'); const srcList = e.dataTransfer.getData('listType'); if(!draggedId || srcList !== listType || draggedId === item.id) return; let currentParent: string | null = item.id; while(currentParent){ if(currentParent === draggedId) return; currentParent = targetItems.find(i=>i.id === currentParent)?.parentId || null; } const draggedIndex = targetItems.findIndex(i => i.id === draggedId); const draggedItem = targetItems[draggedIndex]; const newItems = [...targetItems]; newItems.splice(draggedIndex, 1); const targetItem = newItems.find(i => i.id === item.id); if(targetItem){ draggedItem.parentId = targetItem.parentId; const targetIndex = newItems.findIndex(i => i.id === item.id); newItems.splice(targetIndex + 1, 0, draggedItem); } setTargetItems(newItems); }} onDragOver={(e) => { e.preventDefault(); setDragOverRoomId(`${listType}-${item.id}`) }} onDragLeave={() => setDragOverRoomId(null)} onClick={() => { if (item.type === 'file' && editingItemId !== item.id) { setActiveFileId(item.id); setCurrentScreen('editor') } }} 
+                    <div draggable={editingItemId !== item.id} onDragStart={(e) => { e.dataTransfer.setData('itemId', item.id); e.dataTransfer.setData('listType', listType); e.stopPropagation() }} onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverRoomId(null); const draggedId = e.dataTransfer.getData('itemId'); const srcList = e.dataTransfer.getData('listType'); if(!draggedId || srcList !== listType || draggedId === item.id) return; let currentParent: string | null = item.id; while(currentParent){ if(currentParent === draggedId) return; currentParent = targetItems.find(i=>i.id === currentParent)?.parentId || null; } const draggedIndex = targetItems.findIndex(i => i.id === draggedId); const draggedItem = targetItems[draggedIndex]; const newItems = [...targetItems]; newItems.splice(draggedIndex, 1); const targetItem = newItems.find(i => i.id === item.id); if(targetItem){ draggedItem.parentId = targetItem.parentId; const targetIndex = newItems.findIndex(i => i.id === item.id); newItems.splice(targetIndex + 1, 0, draggedItem); } setTargetItems(newItems); }} onDragOver={(e) => { e.preventDefault(); setDragOverRoomId(`${listType}-${item.id}`) }} onDragLeave={() => setDragOverRoomId(null)} onClick={() => { 
+                      if (selectionMode === listType) {
+                        if (selectedItemIds.includes(item.id)) { setSelectedItemIds(selectedItemIds.filter(id => id !== item.id)); } 
+                        else { setSelectedItemIds([...selectedItemIds, item.id]); }
+                        return;
+                      }
+                      if (item.type === 'file' && editingItemId !== item.id) { setActiveFileId(item.id); setCurrentScreen('editor') } 
+                    }} 
                       style={{ padding: '12px 16px', border: '1px solid #cbd5e0', borderRadius: '6px', 
                         backgroundColor: item.type === 'folder' ? '#edf2f7' : '#ffffff', color: '#2d3748', 
-                        cursor: editingItemId === item.id ? 'text' : (item.type === 'file' ? 'pointer' : 'grab'), display: 'flex', alignItems: 'center', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', fontWeight: item.type === 'folder' ? 'bold' : 'normal', borderBottom: dragOverRoomId === `${listType}-${item.id}` ? '3px solid #3182ce' : '1px solid #cbd5e0' }}>
+                        cursor: selectionMode === listType ? 'pointer' : (editingItemId === item.id ? 'text' : (item.type === 'file' ? 'pointer' : 'grab')), display: 'flex', alignItems: 'center', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', fontWeight: item.type === 'folder' ? 'bold' : 'normal', borderBottom: dragOverRoomId === `${listType}-${item.id}` ? '3px solid #3182ce' : '1px solid #cbd5e0' }}>
+                      
+                      {selectionMode === listType && (
+                        <input type="checkbox" checked={selectedItemIds.includes(item.id)} readOnly style={{ marginRight: '10px', transform: 'scale(1.3)', cursor: 'pointer' }} />
+                      )}
                       <span style={{ marginRight: '8px', fontSize: '1.2rem' }}>{item.type === 'folder' ? '📁' : '📄'}</span>
                       {editingItemId === item.id ? <input autoFocus defaultValue={item.name} onBlur={(e) => { setTargetItems(targetItems.map(i => i.id === item.id ? { ...i, name: e.target.value } : i)); setEditingItemId(null) }} onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; if (e.key === 'Enter') { setTargetItems(targetItems.map(i => i.id === item.id ? { ...i, name: e.currentTarget.value } : i)); setEditingItemId(null) } }} onClick={(e) => e.stopPropagation()} style={{ fontSize: '1rem', padding: '4px', borderRadius: '4px', border: '2px solid #3182ce', outline: 'none', color: '#2d3748' }} /> : <span onDoubleClick={(e) => { e.stopPropagation(); setEditingItemId(item.id) }} style={{ flexGrow: 1 }}>{item.name}</span>}
-                      
-                      {isRoomDeleteMode && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (window.confirm(`「${item.name}」を削除しますか？\n※フォルダの場合は中身もすべて削除されます`)) {
-                              const idsToDelete = new Set([item.id]);
-                              let currentSize = 0;
-                              while (idsToDelete.size > currentSize) {
-                                currentSize = idsToDelete.size;
-                                targetItems.forEach(i => { if (i.parentId && idsToDelete.has(i.parentId)) idsToDelete.add(i.id); });
-                              }
-                              setTargetItems(targetItems.filter(i => !idsToDelete.has(i.id)));
-                            }
-                          }}
-                          style={{ marginLeft: '10px', backgroundColor: '#fff', color: '#e53e3e', border: '2px solid #e53e3e', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', flexShrink: 0 }}
-                        >
-                          ✕
-                        </button>
-                      )}
                     </div>
                     {item.type === 'folder' && <div style={{ borderLeft: '2px dashed #cbd5e0', marginLeft: '12px', paddingLeft: '4px' }}>{renderTree(item.id, level + 1)}<div onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverRoomId(null); const draggedId = e.dataTransfer.getData('itemId'); const srcList = e.dataTransfer.getData('listType'); if(!draggedId || srcList !== listType || draggedId === item.id) return; let currentParent: string | null = item.id; while(currentParent){ if(currentParent === draggedId) return; currentParent = targetItems.find(i=>i.id === currentParent)?.parentId || null; } const draggedIndex = targetItems.findIndex(i => i.id === draggedId); const draggedItem = targetItems[draggedIndex]; const newItems = [...targetItems]; newItems.splice(draggedIndex, 1); draggedItem.parentId = item.id; newItems.push(draggedItem); setTargetItems(newItems); }} onDragOver={(e) => { e.preventDefault(); setDragOverRoomId(`${listType}-empty-${item.id}`) }} onDragLeave={() => setDragOverRoomId(null)} style={{ padding: '8px', color: '#a0aec0', fontSize: '0.8rem', fontStyle: 'italic', borderBottom: dragOverRoomId === `${listType}-empty-${item.id}` ? '3px solid #3182ce' : 'none' }}>↓ ここにドロップしてフォルダの中に入れる</div></div>}
                   </div>
@@ -923,52 +915,73 @@ export default function App() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', gap: '10px' }}>
                     <h2 style={{ margin: 0, fontSize: '1.4rem', color: isDarkMode ? '#e2e8f0' : titleColor }}>{title}</h2>
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                      <button onClick={() => setTargetItems([...targetItems, { id: `file-${Date.now()}`, type: 'file', name: '新規ファイル', parentId: null, cards: [] }])} style={miniBtnStyle}>＋ 新規ファイル</button>
-                      <button onClick={() => setTargetItems([...targetItems, { id: `folder-${Date.now()}`, type: 'folder', name: '新規フォルダ', parentId: null, cards: [] }])} style={miniBtnStyle}>＋ 新規フォルダ</button>
-                      
-                      <select
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (val === 'backup') {
-                            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(targetItems, null, 2));
+                      {selectionMode === listType ? (
+                        <>
+                          <button onClick={() => {
+                            if (selectedItemIds.length === 0) return alert('項目が選択されていません。');
+                            const idsToBackup = new Set(selectedItemIds);
+                            let currentSize = 0;
+                            while (idsToBackup.size > currentSize) {
+                              currentSize = idsToBackup.size;
+                              targetItems.forEach(i => { if (i.parentId && idsToBackup.has(i.parentId)) idsToBackup.add(i.id); });
+                            }
+                            const itemsToExport = targetItems.filter(i => idsToBackup.has(i.id));
+                            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(itemsToExport, null, 2));
                             const downloadAnchor = document.createElement('a');
                             downloadAnchor.setAttribute("href", dataStr);
                             downloadAnchor.setAttribute("download", `kiokushiyo_${backupName}_${new Date().toISOString().slice(0,10)}.json`);
                             document.body.appendChild(downloadAnchor);
                             downloadAnchor.click();
                             downloadAnchor.remove();
-                          } else if (val === 'delete') {
-                            setIsRoomDeleteMode(!isRoomDeleteMode);
-                          }
-                          e.target.value = 'default';
-                        }}
-                        defaultValue="default"
-                        style={{ ...miniBtnStyle, backgroundColor: isRoomDeleteMode ? '#e53e3e' : '#edf2f7', color: isRoomDeleteMode ? '#fff' : '#2d3748', border: '1px solid #cbd5e0', cursor: 'pointer', outline: 'none' }}
-                      >
-                        <option value="default" disabled>⚙️ 操作を選択...</option>
-                        <option value="backup">📥 バックアップ</option>
-                        <option value="delete">{isRoomDeleteMode ? '✅ 削除モード完了' : '🗑 削除モード'}</option>
-                      </select>
-
-                      <label style={{ ...miniBtnStyle, backgroundColor: '#d69e2e', color: 'white', border: 'none', display: 'inline-flex', alignItems: 'center', cursor: 'pointer', margin: 0 }}>
-                        📤 復元
-                        <input type="file" accept=".json" onChange={(e) => {
-                          if (e.target.files && e.target.files[0]) {
-                            const reader = new FileReader();
-                            reader.onload = (event) => {
-                              try {
-                                const parsed = JSON.parse(event.target?.result as string);
-                                if (Array.isArray(parsed) && window.confirm(`${title}のデータを上書きして復元しますか？`)) {
-                                  setTargetItems(parsed);
-                                  alert('復元が完了しました！');
-                                }
-                              } catch { alert('正しいバックアップファイル（JSON）を選択してください。'); }
-                            };
-                            reader.readAsText(e.target.files[0]);
-                          }
-                          e.target.value = ''; 
-                        }} style={{ display: 'none' }} />
-                      </label>
+                            setSelectionMode(null);
+                            setSelectedItemIds([]);
+                          }} style={{ ...miniBtnStyle, backgroundColor: '#38a169', color: 'white', border: 'none' }}>📥 選択項目をバックアップ</button>
+                          
+                          <button onClick={() => {
+                            if (selectedItemIds.length === 0) return alert('項目が選択されていません。');
+                            if (window.confirm('本当に選択した項目（およびその中身）を削除しますか？')) {
+                              const idsToDelete = new Set(selectedItemIds);
+                              let currentSize = 0;
+                              while (idsToDelete.size > currentSize) {
+                                currentSize = idsToDelete.size;
+                                targetItems.forEach(i => { if (i.parentId && idsToDelete.has(i.parentId)) idsToDelete.add(i.id); });
+                              }
+                              setTargetItems(targetItems.filter(i => !idsToDelete.has(i.id)));
+                              setSelectionMode(null);
+                              setSelectedItemIds([]);
+                            }
+                          }} style={{ ...miniBtnStyle, backgroundColor: '#e53e3e', color: 'white', border: 'none' }}>🗑 選択項目を削除</button>
+                          
+                          <button onClick={() => { setSelectionMode(null); setSelectedItemIds([]); }} style={miniBtnStyle}>キャンセル</button>
+                        </>
+                      ) : (
+                        <>
+                          <button onClick={() => setTargetItems([...targetItems, { id: `file-${Date.now()}`, type: 'file', name: '新規ファイル', parentId: null, cards: [] }])} style={miniBtnStyle}>＋ 新規ファイル</button>
+                          <button onClick={() => setTargetItems([...targetItems, { id: `folder-${Date.now()}`, type: 'folder', name: '新規フォルダ', parentId: null, cards: [] }])} style={miniBtnStyle}>＋ 新規フォルダ</button>
+                          
+                          <button onClick={() => { setSelectionMode(listType as 'cloud' | 'local'); setSelectedItemIds([]); }} style={{ ...miniBtnStyle, backgroundColor: '#edf2f7' }}>☑️ 選択して操作</button>
+                          
+                          <label style={{ ...miniBtnStyle, backgroundColor: '#d69e2e', color: 'white', border: 'none', display: 'inline-flex', alignItems: 'center', cursor: 'pointer', margin: 0 }}>
+                            📤 復元
+                            <input type="file" accept=".json" onChange={(e) => {
+                              if (e.target.files && e.target.files[0]) {
+                                const reader = new FileReader();
+                                reader.onload = (event) => {
+                                  try {
+                                    const parsed = JSON.parse(event.target?.result as string);
+                                    if (Array.isArray(parsed) && window.confirm(`${title}のデータを上書きして復元しますか？`)) {
+                                      setTargetItems(parsed);
+                                      alert('復元が完了しました！');
+                                    }
+                                  } catch { alert('正しいバックアップファイル（JSON）を選択してください。'); }
+                                };
+                                reader.readAsText(e.target.files[0]);
+                              }
+                              e.target.value = ''; 
+                            }} style={{ display: 'none' }} />
+                          </label>
+                        </>
+                      )}
                     </div>
                   </div>
                   
