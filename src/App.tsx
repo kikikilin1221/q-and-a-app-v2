@@ -962,16 +962,32 @@ export default function App() {
                           <button onClick={() => { setSelectionMode(listType as 'cloud' | 'local'); setSelectedItemIds([]); }} style={{ ...miniBtnStyle, backgroundColor: '#edf2f7' }}>☑️ 選択して操作</button>
                           
                           <label style={{ ...miniBtnStyle, backgroundColor: '#d69e2e', color: 'white', border: 'none', display: 'inline-flex', alignItems: 'center', cursor: 'pointer', margin: 0 }}>
-                            📤 復元
+                            📤 復元 (追加)
                             <input type="file" accept=".json" onChange={(e) => {
                               if (e.target.files && e.target.files[0]) {
                                 const reader = new FileReader();
                                 reader.onload = (event) => {
                                   try {
                                     const parsed = JSON.parse(event.target?.result as string);
-                                    if (Array.isArray(parsed) && window.confirm(`${title}のデータを上書きして復元しますか？`)) {
-                                      setTargetItems(parsed);
-                                      alert('復元が完了しました！');
+                                    if (Array.isArray(parsed) && window.confirm(`選択したバックアップデータを現在の部屋に追加して復元しますか？`)) {
+                                      // ★ IDの重複を防ぐために新しいIDを振り直し、階層関係を維持する
+                                      const idMap = new Map();
+                                      const newItems = parsed.map((item: any) => {
+                                        const newId = item.type + '-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
+                                        idMap.set(item.id, newId);
+                                        return { ...item, id: newId };
+                                      });
+                                      newItems.forEach((item: any) => {
+                                        if (item.parentId && idMap.has(item.parentId)) {
+                                          item.parentId = idMap.get(item.parentId);
+                                        } else {
+                                          // ★ 復元データ内に親が存在しないアイテムは、一番上の階層（ルート）に配置する
+                                          item.parentId = null;
+                                        }
+                                      });
+                                      // ★ 既存のデータ（prev）を消さずに、新しいデータ（newItems）を追加する
+                                      setTargetItems((prev: AppItem[]) => [...prev, ...newItems]);
+                                      alert('データの追加復元が完了しました！');
                                     }
                                   } catch { alert('正しいバックアップファイル（JSON）を選択してください。'); }
                                 };
