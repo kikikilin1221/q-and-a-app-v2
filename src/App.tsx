@@ -871,9 +871,6 @@ export default function App() {
               <h1 style={{ color: isDarkMode ? '#ffffff' : '#2d3748', margin: 0, fontSize: '2.2rem', letterSpacing: '2px', fontFamily: '"Zen Maru Gothic", sans-serif', fontWeight: 900 }}>キオクシヨ</h1>
             </div>
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-              <button onClick={() => setIsRoomDeleteMode(!isRoomDeleteMode)} style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e0', backgroundColor: isRoomDeleteMode ? '#e53e3e' : '#fff', cursor: 'pointer', color: isRoomDeleteMode ? '#fff' : '#2d3748', fontWeight: 'bold' }}>
-                {isRoomDeleteMode ? '完了' : '🗑 削除モード'}
-              </button>
               <button onClick={() => setIsDarkMode(!isDarkMode)} style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #a0aec0', backgroundColor: isDarkMode ? '#2d3748' : '#fff', cursor: 'pointer', color: isDarkMode ? '#e2e8f0' : '#2d3748', fontWeight: 'bold' }}>
                 {isDarkMode ? '☀️ ライトモード' : '🌙 ダークモード'}
               </button>
@@ -928,15 +925,31 @@ export default function App() {
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                       <button onClick={() => setTargetItems([...targetItems, { id: `file-${Date.now()}`, type: 'file', name: '新規ファイル', parentId: null, cards: [] }])} style={miniBtnStyle}>＋ 新規ファイル</button>
                       <button onClick={() => setTargetItems([...targetItems, { id: `folder-${Date.now()}`, type: 'folder', name: '新規フォルダ', parentId: null, cards: [] }])} style={miniBtnStyle}>＋ 新規フォルダ</button>
-                      <button onClick={() => {
-                        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(targetItems, null, 2));
-                        const downloadAnchor = document.createElement('a');
-                        downloadAnchor.setAttribute("href", dataStr);
-                        downloadAnchor.setAttribute("download", `kiokushiyo_${backupName}_${new Date().toISOString().slice(0,10)}.json`);
-                        document.body.appendChild(downloadAnchor);
-                        downloadAnchor.click();
-                        downloadAnchor.remove();
-                      }} style={{ ...miniBtnStyle, backgroundColor: '#38a169', color: 'white', border: 'none' }}>📥 バックアップ</button>
+                      
+                      <select
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === 'backup') {
+                            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(targetItems, null, 2));
+                            const downloadAnchor = document.createElement('a');
+                            downloadAnchor.setAttribute("href", dataStr);
+                            downloadAnchor.setAttribute("download", `kiokushiyo_${backupName}_${new Date().toISOString().slice(0,10)}.json`);
+                            document.body.appendChild(downloadAnchor);
+                            downloadAnchor.click();
+                            downloadAnchor.remove();
+                          } else if (val === 'delete') {
+                            setIsRoomDeleteMode(!isRoomDeleteMode);
+                          }
+                          e.target.value = 'default';
+                        }}
+                        defaultValue="default"
+                        style={{ ...miniBtnStyle, backgroundColor: isRoomDeleteMode ? '#e53e3e' : '#edf2f7', color: isRoomDeleteMode ? '#fff' : '#2d3748', border: '1px solid #cbd5e0', cursor: 'pointer', outline: 'none' }}
+                      >
+                        <option value="default" disabled>⚙️ 操作を選択...</option>
+                        <option value="backup">📥 バックアップ</option>
+                        <option value="delete">{isRoomDeleteMode ? '✅ 削除モード完了' : '🗑 削除モード'}</option>
+                      </select>
+
                       <label style={{ ...miniBtnStyle, backgroundColor: '#d69e2e', color: 'white', border: 'none', display: 'inline-flex', alignItems: 'center', cursor: 'pointer', margin: 0 }}>
                         📤 復元
                         <input type="file" accept=".json" onChange={(e) => {
