@@ -197,17 +197,22 @@ function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onEdit, i
       {isEditMode && !isCardExpanded && (
         <div {...attributes} {...listeners} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', borderBottom: '1px solid #eee', paddingBottom: '8px', cursor: 'grab' }}>
           <span style={{ fontSize: '0.85rem', color: '#666', fontWeight: 'bold' }}>⠿ ここをドラッグして並び替え</span>
-          <button onClick={() => onDelete(card.id)} style={{ color: '#e53e3e', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold' }}>削除</button>
+          <button onClick={() => { if (window.confirm('本当にこのカードを削除しますか？')) onDelete(card.id); }} style={{ color: '#e53e3e', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold' }}>削除</button>
         </div>
       )}
 
       {/* ★ 統合された共通コントロールヘッダー */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', padding: isCardExpanded ? '15px' : '5px', backgroundColor: isCardExpanded ? '#edf2f7' : 'transparent', borderRadius: '8px', flexShrink: 0 }}>
-        <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#4a5568', display: isCardExpanded && isMobileView ? 'none' : 'block' }}>
-          {isCardExpanded ? `Q${index}` : ''}
+        <h3 style={{ margin: 0, fontSize: '1.3rem', color: '#2b6cb0', fontWeight: 'bold' }}>
+          Q{index}
         </h3>
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap', marginLeft: 'auto' }}>
-          {!isTestMode && <button onClick={() => onEdit(card)} style={{ ...miniBtnStyle, backgroundColor: '#bee3f8', color: '#2b6cb0' }}>編集する</button>}
+          {!isTestMode && (
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={() => onEdit(card)} style={{ ...miniBtnStyle, backgroundColor: '#bee3f8', color: '#2b6cb0' }}>編集する</button>
+              <button onClick={() => { if (window.confirm('本当にこのカードを削除しますか？')) onDelete(card.id); }} style={{ ...miniBtnStyle, backgroundColor: '#fed7d7', color: '#c53030', padding: '4px 10px' }}>✕</button>
+            </div>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', color: '#2d3748' }}>
             <label>文字サイズ:</label>
             <input type="range" min="5" max="32" value={tempFontSize} onChange={(e) => setTempFontSize(Number(e.target.value))} />
@@ -664,7 +669,7 @@ export default function App() {
     }
   };
 
-  // ★ ボックス入力時の総合処理（自動大文字化＋カーソル記憶＋予測変換サジェスト）
+  // ★ ボックス入力時の総合処理（独立した「i」の変換＋カーソル記憶＋予測変換サジェスト）
   const handleBoxInput = () => {
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0) return;
@@ -676,32 +681,8 @@ export default function App() {
     let newText = originalText;
     const offset = range.startOffset;
 
-    // --- ① 自動大文字化 ---
-    let isBlockStart = false;
-    let node: Node | null = textNode;
-    while (node && node.nodeName !== 'DIV' && !(node as Element).classList?.contains('rich-text-content')) {
-      if (node.previousSibling) {
-         if (node.previousSibling.nodeType === Node.TEXT_NODE && !node.previousSibling.nodeValue?.trim()) {
-           node = node.previousSibling;
-           continue;
-         }
-         if (node.previousSibling.nodeName === 'BR') {
-           isBlockStart = true;
-         }
-         break;
-      }
-      node = node.parentNode as Node | null;
-      if (node && (node as Element).classList?.contains('rich-text-content')) {
-        isBlockStart = true;
-        break;
-      }
-    }
-    if (!node) isBlockStart = true;
-
-    if (isBlockStart) {
-      newText = newText.replace(/^[\s ]*([a-z])/, (match) => match.toUpperCase());
-    }
-
+    // --- ① 独立した「i」を「I」に変換 ---
+    // ※文頭の自動大文字化処理は削除しました
     newText = newText.replace(/(^|[\s ])i(?=[\s .,?!;:\)\]}])/g, '$1I');
 
     if (newText !== originalText) {
