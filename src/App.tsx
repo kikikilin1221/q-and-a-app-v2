@@ -1120,7 +1120,6 @@ export default function App() {
                         if (copiedQA) {
                           if (questionRef.current) questionRef.current.innerHTML = copiedQA.q;
                           if (answerRef.current) answerRef.current.innerHTML = copiedQA.a;
-                          alert('コピーした内容を貼り付けました！\n※必要に応じて内容を編集してください。');
                         } else {
                           alert('先に各カードの「コピー」ボタンを押して内容をコピーしてください。');
                         }
@@ -1519,7 +1518,7 @@ export default function App() {
                           display: 'flex', flexDirection: (isMobileView && !isEditMode) ? 'row' : 'column', gap: '20px', overflowX: (isMobileView && !isEditMode) ? 'auto' : 'visible', scrollSnapType: (isMobileView && !isEditMode) ? 'x mandatory' : 'none', paddingBottom: '10px'
                         }
                       }>
-                        {displayCards.map((card, index) => <SortableCard key={card.id} card={card} index={index + 1} isTestMode={isTestMode} isEditMode={isEditMode} isMobileView={isMobileView} isCardExpanded={isGlobalCardsExpanded} onToggleExpand={() => setIsGlobalCardsExpanded(!isGlobalCardsExpanded)} onDelete={(id) => updateActiveFile(i => ({ ...i, cards: i.cards.filter(c => c.id !== id) }))} onEdit={(c)=>{ setEditingCardId(c.id); setFontSize(c.fontSize || 16); if (questionRef.current) questionRef.current.innerHTML = c.question; if (answerRef.current) answerRef.current.innerHTML = c.answer; setQImages([...c.qImages]); setAImages([...c.aImages]); window.scrollTo({ top: 0, behavior: 'smooth' }); setIsGlobalCardsExpanded(false); }} onCopy={(q, a) => { setCopiedQA({ q, a }); alert('カードの内容を一時保存しました！\n上の「📋 貼り付け」ボタンで入力欄にペーストできます。'); }} />)}
+                        {displayCards.map((card, index) => <SortableCard key={card.id} card={card} index={isTestMode ? index + 1 : displayCards.length - index} isTestMode={isTestMode} isEditMode={isEditMode} isMobileView={isMobileView} isCardExpanded={isGlobalCardsExpanded} onToggleExpand={() => setIsGlobalCardsExpanded(!isGlobalCardsExpanded)} onDelete={(id) => updateActiveFile(i => ({ ...i, cards: i.cards.filter(c => c.id !== id) }))} onEdit={(c)=>{ setEditingCardId(c.id); setFontSize(c.fontSize || 16); if (questionRef.current) questionRef.current.innerHTML = c.question; if (answerRef.current) answerRef.current.innerHTML = c.answer; setQImages([...c.qImages]); setAImages([...c.aImages]); window.scrollTo({ top: 0, behavior: 'smooth' }); setIsGlobalCardsExpanded(false); }} onCopy={(q, a) => { setCopiedQA({ q, a }); }} />)}
                       </div>
                     </SortableContext>
                   </DndContext>
