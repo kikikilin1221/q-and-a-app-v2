@@ -157,7 +157,7 @@ function RichToolbar() {
   );
 }
 
-function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onEdit, isMobileView, isCardExpanded, onToggleExpand }: { card: Card, index: number, isTestMode: boolean, isEditMode: boolean, onDelete: (id: string) => void, onEdit: (c: Card) => void, isMobileView: boolean, isCardExpanded: boolean, onToggleExpand: () => void }) {
+function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onEdit, onCopy, isMobileView, isCardExpanded, onToggleExpand }: { card: Card, index: number, isTestMode: boolean, isEditMode: boolean, onDelete: (id: string) => void, onEdit: (c: Card) => void, onCopy: (q: string, a: string) => void, isMobileView: boolean, isCardExpanded: boolean, onToggleExpand: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isOver } = useSortable({ id: card.id })
   const [revealed, setRevealed] = useState(false)
   const [tempFontSize, setTempFontSize] = useState<number>(card.fontSize || 16)
@@ -209,6 +209,7 @@ function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onEdit, i
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap', marginLeft: 'auto' }}>
           {!isTestMode && (
             <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={() => onCopy(card.question, card.answer)} style={{ ...miniBtnStyle, backgroundColor: '#edf2f7', color: '#4a5568' }}>コピー</button>
               <button onClick={() => onEdit(card)} style={{ ...miniBtnStyle, backgroundColor: '#bee3f8', color: '#2b6cb0' }}>編集する</button>
               <button onClick={() => { if (window.confirm('本当にこのカードを削除しますか？')) onDelete(card.id); }} style={{ ...miniBtnStyle, backgroundColor: '#fed7d7', color: '#c53030', padding: '4px 10px' }}>✕</button>
             </div>
@@ -286,6 +287,7 @@ export default function App() {
   const [dragOverRoomId, setDragOverRoomId] = useState<string | null>(null)
   
   const [editingCardId, setEditingCardId] = useState<string | null>(null)
+  const [copiedQA, setCopiedQA] = useState<{q: string, a: string} | null>(null); // ★ 追加：コピー機能用ステート
   const [isMobileView, setIsMobileView] = useState(window.innerWidth <= 768);
   const [selectionMode, setSelectionMode] = useState<'cloud' | 'local' | null>(null); // ★ 追加: 選択モード（どの部屋で選択中か）
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]); // ★ 追加: 選択された項目のIDリスト
@@ -1113,6 +1115,18 @@ export default function App() {
                       <button onClick={() => setIsEnglishMode(!isEnglishMode)} style={{ ...btnStyle, backgroundColor: isEnglishMode ? '#805ad5' : '#e2e8f0', color: isEnglishMode ? 'white' : '#2d3748' }}>
                         {isEnglishMode ? '英単語モードをオフ' : '🇺🇸 英単語モード'}
                       </button>
+                      {/* ★ 追加：コピーした内容の貼り付けボタン */}
+                      <button onClick={() => {
+                        if (copiedQA) {
+                          if (questionRef.current) questionRef.current.innerHTML = copiedQA.q;
+                          if (answerRef.current) answerRef.current.innerHTML = copiedQA.a;
+                          alert('コピーした内容を貼り付けました！\n※必要に応じて内容を編集してください。');
+                        } else {
+                          alert('先に各カードの「コピー」ボタンを押して内容をコピーしてください。');
+                        }
+                      }} style={{ ...btnStyle, backgroundColor: '#fbd38d', color: '#744210' }}>
+                        📋 貼り付け
+                      </button>
                     </div>
 
                     {/* ★ 単語枠パネル */}
@@ -1476,27 +1490,41 @@ export default function App() {
                 </div>
               )}
 
-              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => { const { active, over } = e; if (over && active.id !== over.id && activeFile) { const updatedCards = arrayMove(activeFile.cards, activeFile.cards.findIndex(c => c.id === active.id), activeFile.cards.findIndex(c => c.id === over.id)); updateActiveFile(i => ({ ...i, cards: updatedCards })); } }}>
-                <SortableContext items={activeFile?.cards.map(c => c.id) || []} strategy={verticalListSortingStrategy}>
-                  {/* ★ スマホで閲覧・テスト中は横スクロール（スワイプ）にする */}
-                  <div style={
-                    isGlobalCardsExpanded ? {
-                      position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 10000,
-                      backgroundColor: '#fff',
-                      display: isMobileView ? 'flex' : 'block',
-                      flexDirection: isMobileView ? 'row' : undefined,
-                      overflowX: isMobileView ? 'auto' : 'hidden',
-                      overflowY: isMobileView ? 'hidden' : 'auto',
-                      scrollSnapType: isMobileView ? 'x mandatory' : 'y mandatory',
-                    } : {
-                      display: 'flex', flexDirection: (isMobileView && !isEditMode) ? 'row' : 'column', gap: '20px', overflowX: (isMobileView && !isEditMode) ? 'auto' : 'visible', scrollSnapType: (isMobileView && !isEditMode) ? 'x mandatory' : 'none', paddingBottom: '10px'
-                    }
-                  }>
-                    {/* ★ 不要になった onUpdate と fontSize を削除しました */}
-                    {activeFile?.cards.map((card, index) => <SortableCard key={card.id} card={card} index={index + 1} isTestMode={isTestMode} isEditMode={isEditMode} isMobileView={isMobileView} isCardExpanded={isGlobalCardsExpanded} onToggleExpand={() => setIsGlobalCardsExpanded(!isGlobalCardsExpanded)} onDelete={(id) => updateActiveFile(i => ({ ...i, cards: i.cards.filter(c => c.id !== id) }))} onEdit={(c)=>{ setEditingCardId(c.id); setFontSize(c.fontSize || 16); if (questionRef.current) questionRef.current.innerHTML = c.question; if (answerRef.current) answerRef.current.innerHTML = c.answer; setQImages([...c.qImages]); setAImages([...c.aImages]); window.scrollTo({ top: 0, behavior: 'smooth' }); setIsGlobalCardsExpanded(false); }} />)}
-                  </div>
-                </SortableContext>
-              </DndContext>
+              {(() => {
+                // ★ 閲覧モード（!isTestMode）は新着順（逆順）、テストモードは元の順
+                const displayCards = activeFile?.cards ? (isTestMode ? [...activeFile.cards] : [...activeFile.cards].reverse()) : [];
+                return (
+                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => { 
+                    const { active, over } = e; 
+                    if (over && active.id !== over.id && activeFile) { 
+                      const oldIndex = displayCards.findIndex(c => c.id === active.id);
+                      const newIndex = displayCards.findIndex(c => c.id === over.id);
+                      const updatedDisplayCards = arrayMove(displayCards, oldIndex, newIndex);
+                      // ★ 保存する時は元の向きに戻す（並び替えによるデータの破損を防ぐ）
+                      updateActiveFile(i => ({ ...i, cards: isTestMode ? updatedDisplayCards : updatedDisplayCards.reverse() })); 
+                    } 
+                  }}>
+                    <SortableContext items={displayCards.map(c => c.id)} strategy={verticalListSortingStrategy}>
+                      {/* ★ スマホで閲覧・テスト中は横スクロール（スワイプ）にする */}
+                      <div style={
+                        isGlobalCardsExpanded ? {
+                          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 10000,
+                          backgroundColor: '#fff',
+                          display: isMobileView ? 'flex' : 'block',
+                          flexDirection: isMobileView ? 'row' : undefined,
+                          overflowX: isMobileView ? 'auto' : 'hidden',
+                          overflowY: isMobileView ? 'hidden' : 'auto',
+                          scrollSnapType: isMobileView ? 'x mandatory' : 'y mandatory',
+                        } : {
+                          display: 'flex', flexDirection: (isMobileView && !isEditMode) ? 'row' : 'column', gap: '20px', overflowX: (isMobileView && !isEditMode) ? 'auto' : 'visible', scrollSnapType: (isMobileView && !isEditMode) ? 'x mandatory' : 'none', paddingBottom: '10px'
+                        }
+                      }>
+                        {displayCards.map((card, index) => <SortableCard key={card.id} card={card} index={index + 1} isTestMode={isTestMode} isEditMode={isEditMode} isMobileView={isMobileView} isCardExpanded={isGlobalCardsExpanded} onToggleExpand={() => setIsGlobalCardsExpanded(!isGlobalCardsExpanded)} onDelete={(id) => updateActiveFile(i => ({ ...i, cards: i.cards.filter(c => c.id !== id) }))} onEdit={(c)=>{ setEditingCardId(c.id); setFontSize(c.fontSize || 16); if (questionRef.current) questionRef.current.innerHTML = c.question; if (answerRef.current) answerRef.current.innerHTML = c.answer; setQImages([...c.qImages]); setAImages([...c.aImages]); window.scrollTo({ top: 0, behavior: 'smooth' }); setIsGlobalCardsExpanded(false); }} onCopy={(q, a) => { setCopiedQA({ q, a }); alert('カードの内容を一時保存しました！\n上の「📋 貼り付け」ボタンで入力欄にペーストできます。'); }} />)}
+                      </div>
+                    </SortableContext>
+                  </DndContext>
+                );
+              })()}
             </div>
           </div>
         </div>
