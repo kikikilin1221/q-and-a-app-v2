@@ -161,9 +161,15 @@ function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onEdit, o
   const { attributes, listeners, setNodeRef, transform, transition, isOver } = useSortable({ id: card.id })
   const [revealed, setRevealed] = useState(false)
   const [tempFontSize, setTempFontSize] = useState<number>(card.fontSize || 16)
+  const [isAnswerMaximized, setIsAnswerMaximized] = useState(false) // ★ 追加: 解答枠の最大化用ステート
 
   useEffect(() => { setRevealed(!isTestMode) }, [isTestMode])
-  useEffect(() => { if (!isCardExpanded) setTempFontSize(card.fontSize || 16) }, [isCardExpanded, card.fontSize])
+  useEffect(() => { 
+    if (!isCardExpanded) {
+      setTempFontSize(card.fontSize || 16);
+      setIsAnswerMaximized(false); // ★ 縮小時に最大化もリセット
+    }
+  }, [isCardExpanded, card.fontSize])
 
   const baseStyle = { transform: isCardExpanded ? 'none' : CSS.Transform.toString(transform), transition: isCardExpanded ? 'none' : transition, border: isOver ? '3px dashed #3182ce' : '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', backgroundColor: '#ffffff', boxShadow: isOver ? '0 4px 12px rgba(49, 130, 206, 0.3)' : '0 2px 4px rgba(0,0,0,0.05)', position: 'relative' as const, zIndex: 1, color: '#2d3748', ...((isMobileView && !isEditMode) ? { flex: '0 0 100%', scrollSnapAlign: 'center', boxSizing: 'border-box' as const, minWidth: '0' } : {}) }
   const cardContainerStyle = isCardExpanded ? {
@@ -228,8 +234,8 @@ function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onEdit, o
       {/* ★ QA本体 (拡大時は作成画面と同じレイアウト) */}
       <div style={{ display: isCardExpanded ? 'flex' : 'grid', gridTemplateColumns: !isCardExpanded ? (isMobileView ? 'minmax(0, 1fr)' : '390px 390px') : undefined, flexDirection: isCardExpanded && !isMobileView ? 'row' : (isMobileView ? 'column' : 'row'), gap: '20px', justifyContent: 'center', width: '100%', flex: isCardExpanded ? 1 : 'none' }}>
         
-        {/* Q枠 */}
-        <div style={{ flex: (!isCardExpanded && isMobileView) ? 'none' : 1, display: 'flex', flexDirection: 'column', border: '1px solid #cbd5e0', borderRadius: '6px', height: isCardExpanded ? '100%' : '250px', minHeight: isCardExpanded ? 0 : '250px', minWidth: 0, width: '100%', boxSizing: 'border-box' }}>
+        {/* Q枠 (解答が最大化されている場合は非表示) */}
+        <div style={{ display: isAnswerMaximized ? 'none' : 'flex', flex: (!isCardExpanded && isMobileView) ? 'none' : 1, flexDirection: 'column', border: '1px solid #cbd5e0', borderRadius: '6px', height: isCardExpanded ? '100%' : '250px', minHeight: isCardExpanded ? 0 : '250px', minWidth: 0, width: '100%', boxSizing: 'border-box' }}>
           <div style={{ padding: '8px 12px', backgroundColor: '#ebf8ff', borderBottom: '1px solid #cbd5e0', borderTopLeftRadius: '6px', borderTopRightRadius: '6px' }}>
             <strong style={{ color: '#2b6cb0', fontSize: '1rem' }}>問題</strong>
           </div>
@@ -243,6 +249,12 @@ function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onEdit, o
         <div style={{ flex: (!isCardExpanded && isMobileView) ? 'none' : 1, display: 'flex', flexDirection: 'column', border: '1px solid #cbd5e0', borderRadius: '6px', height: isCardExpanded ? '100%' : '250px', minHeight: isCardExpanded ? 0 : '250px', minWidth: 0, width: '100%', boxSizing: 'border-box', cursor: isTestMode ? 'pointer' : 'default' }} onClick={() => { if (isTestMode) setRevealed(!revealed) }}>
           <div style={{ padding: '8px 12px', backgroundColor: '#fff5f5', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #cbd5e0', borderTopLeftRadius: '6px', borderTopRightRadius: '6px' }}>
             <strong style={{ color: '#c53030', fontSize: '1rem' }}>解答 {isTestMode && <span style={{fontSize: '0.8rem', color: '#e53e3e', marginLeft: '10px'}}>(クリックで表示)</span>}</strong>
+            {/* ★ 追加: さらに拡大ボタン (拡大時のみ表示) */}
+            {isCardExpanded && (
+              <button onClick={(e) => { e.stopPropagation(); setIsAnswerMaximized(!isAnswerMaximized); }} style={{ ...miniBtnStyle, backgroundColor: '#fed7d7', color: '#c53030' }}>
+                {isAnswerMaximized ? '元に戻す' : 'さらに拡大 ⤢'}
+              </button>
+            )}
           </div>
           <div style={{ flex: 1, padding: '10px', position: 'relative', overflow: 'auto', fontSize: `${tempFontSize}px`, color: '#2d3748', textAlign: 'left', whiteSpace: 'pre' }}>
             <div style={{ opacity: (!revealed) ? 0 : 1, transition: 'opacity 0.2s', height: '100%', minWidth: 'max-content' }}>
@@ -304,8 +316,9 @@ export default function App() {
 
   const [qImages, setQImages] = useState<FloatingImage[]>([])
   const [aImages, setAImages] = useState<FloatingImage[]>([])
-  const [selectedImgId, setSelectedImgId] = useState<string | null>(null)
+　const [selectedImgId, setSelectedImgId] = useState<string | null>(null)
   const [isExpanded, setIsExpanded] = useState(false); // ★ 全体拡大用に統合
+  const [isAnswerMaximized, setIsAnswerMaximized] = useState(false); // ★ 追加: 解答をさらに拡大
   const [wordPanelSide, setWordPanelSide] = useState<'right' | 'left'>('right'); // ★ 単語枠の位置用
   
   const [stockImages, setStockImages] = useState<StockImage[]>([])
@@ -587,7 +600,12 @@ export default function App() {
   };
   const handleSignOut = async () => { await supabase.auth.signOut(); setItems([]); setIsDataLoaded(false); setAuthMode('login'); };
 
-  useEffect(() => { if (!isExpanded) setTempCreateFontSize(fontSize); }, [isExpanded, fontSize])
+  useEffect(() => { 
+    if (!isExpanded) {
+      setTempCreateFontSize(fontSize);
+      setIsAnswerMaximized(false); // ★ 追加: 縮小時に解答拡大をリセット
+    }
+  }, [isExpanded, fontSize])
 
  // ★ クリック時とキーボード入力時のみ静かにカーソル位置を記憶（再描画なし）
   const saveCursorPosition = () => {
@@ -1332,8 +1350,8 @@ export default function App() {
                     width: '100%',
                     flex: isExpanded ? 1 : 'none'
                   }}>
-                    {/* Q枠 */}
-                    <div style={{ flex: (!isExpanded && isMobileView) ? 'none' : 1, display: 'flex', flexDirection: 'column', border: '1px solid #cbd5e0', borderRadius: '6px', height: isExpanded ? '100%' : '250px', minHeight: isExpanded ? 0 : '250px' }}>
+                    {/* Q枠 (解答拡大時は非表示) */}
+                    <div style={{ display: isAnswerMaximized ? 'none' : 'flex', flex: (!isExpanded && isMobileView) ? 'none' : 1, flexDirection: 'column', border: '1px solid #cbd5e0', borderRadius: '6px', height: isExpanded ? '100%' : '250px', minHeight: isExpanded ? 0 : '250px' }}>
                       <div style={{ padding: '10px', backgroundColor: '#ebf8ff', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #cbd5e0', borderTopLeftRadius: '6px', borderTopRightRadius: '6px' }}>
                         <strong style={{ color: '#2b6cb0', fontSize: '1.1rem' }}>問題</strong>
                         <button onClick={() => handleFloatingImageInsertBtn(true)} style={miniBtnStyle}>🖼 画像</button>
@@ -1354,7 +1372,13 @@ export default function App() {
                     <div style={{ flex: (!isExpanded && isMobileView) ? 'none' : 1, display: 'flex', flexDirection: 'column', border: '1px solid #cbd5e0', borderRadius: '6px', height: isExpanded ? '100%' : '250px', minHeight: isExpanded ? 0 : '250px' }}>
                       <div style={{ padding: '10px', backgroundColor: '#fff5f5', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #cbd5e0', borderTopLeftRadius: '6px', borderTopRightRadius: '6px' }}>
                         <strong style={{ color: '#c53030', fontSize: '1.1rem' }}>解答</strong>
-                        <div style={{ display: 'flex', gap: '8px' }}>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          {/* ★ 追加: さらに拡大ボタン (拡大時のみ表示) */}
+                          {isExpanded && (
+                            <button onClick={() => setIsAnswerMaximized(!isAnswerMaximized)} style={{ ...miniBtnStyle, backgroundColor: '#fed7d7', color: '#c53030' }}>
+                              {isAnswerMaximized ? '元に戻す' : 'さらに拡大 ⤢'}
+                            </button>
+                          )}
                           <button onClick={() => { if (answerRef.current) answerRef.current.innerHTML = ''; }} style={{ ...miniBtnStyle, color: '#e53e3e' }}>消去</button>
                           <button onClick={() => handleFloatingImageInsertBtn(false)} style={miniBtnStyle}>🖼 画像</button>
                         </div>
