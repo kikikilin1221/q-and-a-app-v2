@@ -235,7 +235,7 @@ function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onEdit, o
           </div>
           <div style={{ flex: 1, padding: '10px', position: 'relative', overflow: 'auto', fontSize: `${tempFontSize}px`, color: '#2d3748', textAlign: 'left', whiteSpace: 'pre' }}>
             {renderImages(card.qImages)}
-            <div dangerouslySetInnerHTML={{ __html: renderLatex(card.question) }} className="rich-text-content" style={{ minWidth: 'min-content' }} />
+            <div dangerouslySetInnerHTML={{ __html: renderLatex(card.question) }} className="rich-text-content" style={{ minWidth: 'max-content' }} />
           </div>
         </div>
         
@@ -245,9 +245,9 @@ function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onEdit, o
             <strong style={{ color: '#c53030', fontSize: '1rem' }}>解答 {isTestMode && <span style={{fontSize: '0.8rem', color: '#e53e3e', marginLeft: '10px'}}>(クリックで表示)</span>}</strong>
           </div>
           <div style={{ flex: 1, padding: '10px', position: 'relative', overflow: 'auto', fontSize: `${tempFontSize}px`, color: '#2d3748', textAlign: 'left', whiteSpace: 'pre' }}>
-            <div style={{ opacity: (!revealed) ? 0 : 1, transition: 'opacity 0.2s', height: '100%', minWidth: 'min-content' }}>
+            <div style={{ opacity: (!revealed) ? 0 : 1, transition: 'opacity 0.2s', height: '100%', minWidth: 'max-content' }}>
               {renderImages(card.aImages)}
-              <div dangerouslySetInnerHTML={{ __html: renderLatex(card.answer) }} className="rich-text-content" />
+              <div dangerouslySetInnerHTML={{ __html: renderLatex(card.answer) }} className="rich-text-content" style={{ minWidth: 'max-content' }} />
             </div>
             {!revealed && <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', fontWeight: 'bold', color: '#a0aec0' }}>クリックで解答を表示</div>}
           </div>
@@ -1346,7 +1346,7 @@ export default function App() {
                           </div>
                         )}
                         {renderNewImages(qImages, true)}
-                        <div ref={questionRef} contentEditable onInput={handleBoxInput} onKeyDown={handleBoxKeyDown} onBlur={() => setTimeout(() => setSuggestionTarget(null), 200)} onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, true)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre', color: '#000000', minWidth: 'min-content' }} />
+                        <div ref={questionRef} contentEditable onInput={handleBoxInput} onKeyDown={handleBoxKeyDown} onBlur={() => setTimeout(() => setSuggestionTarget(null), 200)} onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, true)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre', color: '#000000', minWidth: 'max-content' }} />
                       </div>
                     </div>
                     
@@ -1354,11 +1354,14 @@ export default function App() {
                     <div style={{ flex: (!isExpanded && isMobileView) ? 'none' : 1, display: 'flex', flexDirection: 'column', border: '1px solid #cbd5e0', borderRadius: '6px', height: isExpanded ? '100%' : '250px', minHeight: isExpanded ? 0 : '250px' }}>
                       <div style={{ padding: '10px', backgroundColor: '#fff5f5', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #cbd5e0', borderTopLeftRadius: '6px', borderTopRightRadius: '6px' }}>
                         <strong style={{ color: '#c53030', fontSize: '1.1rem' }}>解答</strong>
-                        <button onClick={() => handleFloatingImageInsertBtn(false)} style={miniBtnStyle}>🖼 画像</button>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button onClick={() => { if (answerRef.current) answerRef.current.innerHTML = ''; }} style={{ ...miniBtnStyle, color: '#e53e3e' }}>消去</button>
+                          <button onClick={() => handleFloatingImageInsertBtn(false)} style={miniBtnStyle}>🖼 画像</button>
+                        </div>
                       </div>
                       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '10px', position: 'relative', overflow: 'auto' }}>
                         {renderNewImages(aImages, false)}
-                        <div ref={answerRef} contentEditable onInput={handleBoxInput} onKeyDown={handleBoxKeyDown} onBlur={() => setTimeout(() => setSuggestionTarget(null), 200)} onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, false)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre', color: '#000000', minWidth: 'min-content' }} />
+                        <div ref={answerRef} contentEditable onInput={handleBoxInput} onKeyDown={handleBoxKeyDown} onBlur={() => setTimeout(() => setSuggestionTarget(null), 200)} onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, false)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre', color: '#000000', minWidth: 'max-content' }} />
                       </div>
                     </div>
                   </div>
