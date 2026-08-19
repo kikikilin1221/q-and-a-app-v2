@@ -58,6 +58,48 @@ interface AppItem { id: string; type: ItemType; name: string; parentId: string |
 interface WordItem { id: string; type: 'word' | 'folder'; text: string; bgColor: string; textColor: string; parentId: string | null; isOpen: boolean }
 
 // --- ユーティリティ ---
+
+// ★ ここから追加：大容量保存(IndexedDB)用のヘルパー機能
+const idb = {
+  dbPromise: null as Promise<IDBDatabase> | null,
+  getDb() {
+    if (!this.dbPromise) {
+      this.dbPromise = new Promise((resolve, reject) => {
+        const req = indexedDB.open('KiokushiyoDB', 1);
+        req.onupgradeneeded = (e: any) => {
+          e.target.result.createObjectStore('store');
+        };
+        req.onsuccess = (e: any) => resolve(e.target.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+    return this.dbPromise;
+  },
+  async get(key: string) {
+    try {
+      const db = await this.getDb();
+      return new Promise<any>((resolve, reject) => {
+        const tx = db.transaction('store', 'readonly');
+        const req = tx.objectStore('store').get(key);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    } catch(e) { return null; }
+  },
+  async set(key: string, val: any) {
+    try {
+      const db = await this.getDb();
+      return new Promise<void>((resolve, reject) => {
+        const tx = db.transaction('store', 'readwrite');
+        tx.objectStore('store').put(val, key);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    } catch(e) {}
+  }
+};
+// ★ ここまで
+
 const renderLatex = (htmlString: string) => {
   if (!htmlString) return '';
   let parsed = htmlString;
@@ -569,24 +611,58 @@ export default function App() {
     saveCloudData();
   }, [items, isDataLoaded, session]);
 
-  // ★ 追加: ローカル部屋の読み込みと自動保存
+  // ★ 変更: ローカル部屋・ワード・スクショ箱の大容量データ読み込み（IndexedDB + 自動移行処理）
   useEffect(() => {
-    const savedLocalItems = localStorage.getItem('kiokushiyo_local_room');
-    if (savedLocalItems) setLocalItems(JSON.parse(savedLocalItems));
-    setIsLocalDataLoaded(true);
+    const loadData = async () => {
+      // 1. ローカル部屋のデータ読み込み
+      let lItems = await idb.get('kiokushiyo_local_room');
+      if (!lItems) {
+        // IndexedDBに無ければ、古いlocalStorageからデータを救出して移行する
+        const saved = localStorage.getItem('kiokushiyo_local_room');
+        if (saved) { lItems = JSON.parse(saved); await idb.set('kiokushiyo_local_room', lItems); }
+      }
+      if (lItems) setLocalItems(lItems);
+      setIsLocalDataLoaded(true);
+
+      // 2. ワード一覧のデータ読み込み
+      let wItems = await idb.get('kiokushiyo_words');
+      if (!wItems) {
+        const saved = localStorage.getItem('kiokushiyo_words');
+        if (saved) { wItems = JSON.parse(saved); await idb.set('kiokushiyo_words', wItems); }
+      }
+      if (wItems) setWordItems(wItems);
+
+      // 3. スクショ箱のデータ読み込み
+      let sImages = await idb.get('kiokushiyo_stock');
+      if (!sImages) {
+        const saved = localStorage.getItem('kiokushiyo_stock');
+        if (saved) { sImages = JSON.parse(saved); await idb.set('kiokushiyo_stock', sImages); }
+      }
+      if (sImages) setStockImages(sImages);
+
+      // 色パレットは非常に軽いため、今まで通りlocalStorageから読み込み
+      const storedColors = localStorage.getItem('kiokushiyo_colors');
+      if (storedColors) setSavedColors(JSON.parse(storedColors));
+    };
+    loadData();
   }, []);
-  useEffect(() => {
-    if (isLocalDataLoaded) localStorage.setItem('kiokushiyo_local_room', JSON.stringify(localItems));
+
+  // ★ 変更: 各データが更新されたら、大容量のIndexedDBへ非同期で保存する
+  useEffect(() => { 
+    if (isLocalDataLoaded) idb.set('kiokushiyo_local_room', localItems); 
   }, [localItems, isLocalDataLoaded]);
 
- useEffect(() => {
-    const savedWords = localStorage.getItem('kiokushiyo_words'); if (savedWords) setWordItems(JSON.parse(savedWords));
-    const savedStock = localStorage.getItem('kiokushiyo_stock'); if (savedStock) setStockImages(JSON.parse(savedStock));
-    const storedColors = localStorage.getItem('kiokushiyo_colors'); if (storedColors) setSavedColors(JSON.parse(storedColors));
-  }, []);
-  useEffect(() => { if (wordItems.length > 0) localStorage.setItem('kiokushiyo_words', JSON.stringify(wordItems)); }, [wordItems]);
-  useEffect(() => { if (stockImages.length > 0) localStorage.setItem('kiokushiyo_stock', JSON.stringify(stockImages)); }, [stockImages]);
-  useEffect(() => { localStorage.setItem('kiokushiyo_colors', JSON.stringify(savedColors)); }, [savedColors]);
+  useEffect(() => { 
+    if (isLocalDataLoaded) idb.set('kiokushiyo_words', wordItems); 
+  }, [wordItems, isLocalDataLoaded]);
+
+  useEffect(() => { 
+    if (isLocalDataLoaded) idb.set('kiokushiyo_stock', stockImages); 
+  }, [stockImages, isLocalDataLoaded]);
+
+  useEffect(() => { 
+    localStorage.setItem('kiokushiyo_colors', JSON.stringify(savedColors)); 
+  }, [savedColors]);
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault(); setAuthMessage('処理中...');
