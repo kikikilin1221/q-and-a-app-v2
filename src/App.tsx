@@ -100,30 +100,14 @@ const idb = {
 };
 // ★ ここまで
 
-// --- ユーティリティ ---
 const renderLatex = (htmlString: string) => {
   if (!htmlString) return '';
-  
-  // ★ エディタ特有のゴミ文字（ゼロ幅スペース）をあらかじめ消去
-  let parsed = htmlString.replace(/\u200B/g, '');
-  
-  // ★ エディタの仕様で $$ や $ がHTMLタグで分断されるのを防ぐ
-  parsed = parsed.replace(/\$(<[^>]+>)+\$/g, '$$$$');
-
+  let parsed = htmlString;
   const cleanMath = (math: string) => {
     const temp = document.createElement('div');
-    // HTMLの改行タグをテキストの改行(\n)に変換
-    temp.innerHTML = math.replace(/<br\s*\/?>/gi, '\n')
-                         .replace(/<\/div>\s*<div[^>]*>/gi, '\n')
-                         .replace(/<\/p>\s*<p[^>]*>/gi, '\n');
-    
-    // 正規表現を使わず、textContentで純粋な文字だけを抽出
-    // (これにより数式内の < や > が消滅するバグを防止)
-    let text = temp.textContent || temp.innerText || '';
-    
-    return text.replace(/\u00A0/g, ' ').replace(/[\u202F\u205F\u3000]/g, ' ');
+    temp.innerHTML = math.replace(/<br\s*\/?>/gi, '\n');
+    return temp.textContent || temp.innerText || "";
   };
-
   const renderMath = (math: string, displayMode: boolean) => {
     try {
       const pureMath = cleanMath(math);
@@ -132,7 +116,6 @@ const renderLatex = (htmlString: string) => {
       return math;
     }
   };
-
   parsed = parsed.replace(/\$\$([\s\S]*?)\$\$/g, (_, math) => renderMath(math, true));
   parsed = parsed.replace(/\\\[([\s\S]*?)\\\]/g, (_, math) => renderMath(math, true));
   parsed = parsed.replace(/\\\(([\s\S]*?)\\\)/g, (_, math) => renderMath(math, false));
@@ -782,33 +765,6 @@ export default function App() {
     }
   };
 
-  // ★ コピペ時の改行消失を防ぎ、LaTeX数式をそのままの構造で貼り付ける処理
-  const handleBoxPaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    const text = e.clipboardData.getData('text/plain');
-    
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0) return;
-    
-    const range = sel.getRangeAt(0);
-    range.deleteContents();
-    
-    // ブラウザのinsertHTMLに頼らず、改行(\n)を含むテキストを直接ノードとして挿入
-    const textNode = document.createTextNode(text);
-    range.insertNode(textNode);
-    
-    // カーソルを挿入したテキストの末尾へ移動
-    range.setStartAfter(textNode);
-    range.collapse(true);
-    sel.removeAllRanges();
-    sel.addRange(range);
-    
-    saveCursorPosition();
-    
-    // Reactに変更を通知
-    e.currentTarget.dispatchEvent(new Event('input', { bubbles: true }));
-  };
-
   // ★ ボックス入力時の総合処理（独立した「i」の変換＋カーソル記憶＋予測変換サジェスト）
   const handleBoxInput = () => {
     const sel = window.getSelection();
@@ -822,8 +778,8 @@ export default function App() {
     const offset = range.startOffset;
 
     // --- ① 独立した「i」を「I」に変換 ---
-    // ※数式の変数「i」や記号が破壊されるのを防ぐため無効化
-    // newText = newText.replace(/(^|[\s ])i(?=[\s .,?!;:\)\]}])/g, '$1I');
+    // ※文頭の自動大文字化処理は削除しました
+    newText = newText.replace(/(^|[\s ])i(?=[\s .,?!;:\)\]}])/g, '$1I');
 
     if (newText !== originalText) {
       textNode.nodeValue = newText;
@@ -1484,7 +1440,7 @@ export default function App() {
                           </div>
                         )}
                         {renderNewImages(qImages, true)}
-                        <div ref={questionRef} contentEditable onInput={handleBoxInput} onPaste={handleBoxPaste} onKeyDown={handleBoxKeyDown} onBlur={() => setTimeout(() => setSuggestionTarget(null), 200)} onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, true)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre', color: '#000000', minWidth: 'max-content' }} />
+                        <div ref={questionRef} contentEditable onInput={handleBoxInput} onKeyDown={handleBoxKeyDown} onBlur={() => setTimeout(() => setSuggestionTarget(null), 200)} onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, true)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre', color: '#000000', minWidth: 'max-content' }} />
                       </div>
                     </div>
                     
@@ -1505,7 +1461,7 @@ export default function App() {
                       </div>
                       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '10px', position: 'relative', overflow: 'auto' }}>
                         {renderNewImages(aImages, false)}
-                        <div ref={answerRef} contentEditable onInput={handleBoxInput} onPaste={handleBoxPaste} onKeyDown={handleBoxKeyDown} onBlur={() => setTimeout(() => setSuggestionTarget(null), 200)} onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, false)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre', color: '#000000', minWidth: 'max-content' }} />
+                        <div ref={answerRef} contentEditable onInput={handleBoxInput} onKeyDown={handleBoxKeyDown} onBlur={() => setTimeout(() => setSuggestionTarget(null), 200)} onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, false)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre', color: '#000000', minWidth: 'max-content' }} />
                       </div>
                     </div>
                   </div>
