@@ -111,18 +111,16 @@ const renderLatex = (htmlString: string) => {
   parsed = parsed.replace(/\$(<[^>]+>)+\$/g, '$$$$');
 
   const cleanMath = (math: string) => {
-    // ★ HTMLタグを改行に変換しつつ、不要なタグを完全に除去する
-    let html = math.replace(/<br\s*\/?>/gi, '\n')
-                   .replace(/<\/div>\s*<div[^>]*>/gi, '\n')
-                   .replace(/<\/p>\s*<p[^>]*>/gi, '\n')
-                   .replace(/<[^>]+>/g, '');
+    const temp = document.createElement('div');
+    // HTMLの改行タグをテキストの改行(\n)に変換
+    temp.innerHTML = math.replace(/<br\s*\/?>/gi, '\n')
+                         .replace(/<\/div>\s*<div[^>]*>/gi, '\n')
+                         .replace(/<\/p>\s*<p[^>]*>/gi, '\n');
     
-    // ★ textareaを使って安全にHTMLエンティティ(&amp;や&lt;)を元の記号に戻す
-    const temp = document.createElement('textarea');
-    temp.innerHTML = html;
-    let text = temp.value;
+    // 正規表現を使わず、textContentで純粋な文字だけを抽出
+    // (これにより数式内の < や > が消滅するバグを防止)
+    let text = temp.textContent || temp.innerText || '';
     
-    // ★ Katexがエラーを起こす特殊な空白文字（ノーブレークスペース等）を半角スペースに統一
     return text.replace(/\u00A0/g, ' ').replace(/[\u202F\u205F\u3000]/g, ' ');
   };
 
@@ -789,14 +787,26 @@ export default function App() {
     e.preventDefault();
     const text = e.clipboardData.getData('text/plain');
     
-    // HTMLエンティティをエスケープした上で、改行を <br> に変換
-    const html = text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/\r\n|\n|\r/g, '<br>');
-      
-    document.execCommand("insertHTML", false, html);
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    
+    const range = sel.getRangeAt(0);
+    range.deleteContents();
+    
+    // ブラウザのinsertHTMLに頼らず、改行(\n)を含むテキストを直接ノードとして挿入
+    const textNode = document.createTextNode(text);
+    range.insertNode(textNode);
+    
+    // カーソルを挿入したテキストの末尾へ移動
+    range.setStartAfter(textNode);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+    
+    saveCursorPosition();
+    
+    // Reactに変更を通知
+    e.currentTarget.dispatchEvent(new Event('input', { bubbles: true }));
   };
 
   // ★ ボックス入力時の総合処理（独立した「i」の変換＋カーソル記憶＋予測変換サジェスト）
