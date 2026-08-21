@@ -784,11 +784,19 @@ export default function App() {
     }
   };
 
-  // ★ 追加：コピペ時の「文字化け・レイアウト崩れ」を防ぐため、純粋なテキストのみを貼り付ける処理
+  // ★ コピペ時の改行消失を防ぎ、LaTeX数式をそのままの構造で貼り付ける処理
   const handleBoxPaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
     e.preventDefault();
     const text = e.clipboardData.getData('text/plain');
-    document.execCommand("insertText", false, text);
+    
+    // HTMLエンティティをエスケープした上で、改行を <br> に変換
+    const html = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\r\n|\n|\r/g, '<br>');
+      
+    document.execCommand("insertHTML", false, html);
   };
 
   // ★ ボックス入力時の総合処理（独立した「i」の変換＋カーソル記憶＋予測変換サジェスト）
@@ -804,8 +812,8 @@ export default function App() {
     const offset = range.startOffset;
 
     // --- ① 独立した「i」を「I」に変換 ---
-    // ※文頭の自動大文字化処理は削除しました
-    newText = newText.replace(/(^|[\s ])i(?=[\s .,?!;:\)\]}])/g, '$1I');
+    // ※数式の変数「i」や記号が破壊されるのを防ぐため無効化
+    // newText = newText.replace(/(^|[\s ])i(?=[\s .,?!;:\)\]}])/g, '$1I');
 
     if (newText !== originalText) {
       textNode.nodeValue = newText;
