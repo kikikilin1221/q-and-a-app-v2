@@ -105,8 +105,14 @@ const renderLatex = (htmlString: string) => {
   let parsed = htmlString;
   const cleanMath = (math: string) => {
     const temp = document.createElement('div');
-    temp.innerHTML = math.replace(/<br\s*\/?>/gi, '\n');
-    return temp.textContent || temp.innerText || "";
+    // ★ コピペ時の不要なHTMLタグの改行を保持し、Katexのエラーを防ぐ
+    let html = math.replace(/<br\s*\/?>/gi, '\n')
+                   .replace(/<\/div>\s*<div[^>]*>/gi, '\n')
+                   .replace(/<\/p>\s*<p[^>]*>/gi, '\n');
+    temp.innerHTML = html;
+    let text = temp.textContent || temp.innerText || "";
+    // ★ Katexがパースエラーを起こす「特殊な空白（ノーブレークスペース等）」を通常の半角スペースに変換
+    return text.replace(/\u00A0/g, ' ').replace(/\u200B/g, '').replace(/[\u202F\u205F\u3000]/g, ' ');
   };
   const renderMath = (math: string, displayMode: boolean) => {
     try {
@@ -763,6 +769,13 @@ export default function App() {
         setSelectedSuggestionIndex(-1);
       }
     }
+  };
+
+  // ★ 追加：コピペ時の「文字化け・レイアウト崩れ」を防ぐため、純粋なテキストのみを貼り付ける処理
+  const handleBoxPaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const text = e.clipboardData.getData('text/plain');
+    document.execCommand("insertText", false, text);
   };
 
   // ★ ボックス入力時の総合処理（独立した「i」の変換＋カーソル記憶＋予測変換サジェスト）
@@ -1440,7 +1453,7 @@ export default function App() {
                           </div>
                         )}
                         {renderNewImages(qImages, true)}
-                        <div ref={questionRef} contentEditable onInput={handleBoxInput} onKeyDown={handleBoxKeyDown} onBlur={() => setTimeout(() => setSuggestionTarget(null), 200)} onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, true)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre', color: '#000000', minWidth: 'max-content' }} />
+                        <div ref={questionRef} contentEditable onInput={handleBoxInput} onPaste={handleBoxPaste} onKeyDown={handleBoxKeyDown} onBlur={() => setTimeout(() => setSuggestionTarget(null), 200)} onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, true)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre', color: '#000000', minWidth: 'max-content' }} />
                       </div>
                     </div>
                     
@@ -1461,7 +1474,7 @@ export default function App() {
                       </div>
                       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '10px', position: 'relative', overflow: 'auto' }}>
                         {renderNewImages(aImages, false)}
-                        <div ref={answerRef} contentEditable onInput={handleBoxInput} onKeyDown={handleBoxKeyDown} onBlur={() => setTimeout(() => setSuggestionTarget(null), 200)} onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, false)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre', color: '#000000', minWidth: 'max-content' }} />
+                        <div ref={answerRef} contentEditable onInput={handleBoxInput} onPaste={handleBoxPaste} onKeyDown={handleBoxKeyDown} onBlur={() => setTimeout(() => setSuggestionTarget(null), 200)} onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, false)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre', color: '#000000', minWidth: 'max-content' }} />
                       </div>
                     </div>
                   </div>
