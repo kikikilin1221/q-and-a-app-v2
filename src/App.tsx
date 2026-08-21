@@ -100,20 +100,32 @@ const idb = {
 };
 // ★ ここまで
 
+// --- ユーティリティ ---
 const renderLatex = (htmlString: string) => {
   if (!htmlString) return '';
-  let parsed = htmlString;
+  
+  // ★ エディタ特有のゴミ文字（ゼロ幅スペース）をあらかじめ消去
+  let parsed = htmlString.replace(/\u200B/g, '');
+  
+  // ★ エディタの仕様で $$ や $ がHTMLタグで分断されるのを防ぐ
+  parsed = parsed.replace(/\$(<[^>]+>)+\$/g, '$$$$');
+
   const cleanMath = (math: string) => {
-    const temp = document.createElement('div');
-    // ★ コピペ時の不要なHTMLタグの改行を保持し、Katexのエラーを防ぐ
+    // ★ HTMLタグを改行に変換しつつ、不要なタグを完全に除去する
     let html = math.replace(/<br\s*\/?>/gi, '\n')
                    .replace(/<\/div>\s*<div[^>]*>/gi, '\n')
-                   .replace(/<\/p>\s*<p[^>]*>/gi, '\n');
+                   .replace(/<\/p>\s*<p[^>]*>/gi, '\n')
+                   .replace(/<[^>]+>/g, '');
+    
+    // ★ textareaを使って安全にHTMLエンティティ(&amp;や&lt;)を元の記号に戻す
+    const temp = document.createElement('textarea');
     temp.innerHTML = html;
-    let text = temp.textContent || temp.innerText || "";
-    // ★ Katexがパースエラーを起こす「特殊な空白（ノーブレークスペース等）」を通常の半角スペースに変換
-    return text.replace(/\u00A0/g, ' ').replace(/\u200B/g, '').replace(/[\u202F\u205F\u3000]/g, ' ');
+    let text = temp.value;
+    
+    // ★ Katexがエラーを起こす特殊な空白文字（ノーブレークスペース等）を半角スペースに統一
+    return text.replace(/\u00A0/g, ' ').replace(/[\u202F\u205F\u3000]/g, ' ');
   };
+
   const renderMath = (math: string, displayMode: boolean) => {
     try {
       const pureMath = cleanMath(math);
@@ -122,6 +134,7 @@ const renderLatex = (htmlString: string) => {
       return math;
     }
   };
+
   parsed = parsed.replace(/\$\$([\s\S]*?)\$\$/g, (_, math) => renderMath(math, true));
   parsed = parsed.replace(/\\\[([\s\S]*?)\\\]/g, (_, math) => renderMath(math, true));
   parsed = parsed.replace(/\\\(([\s\S]*?)\\\)/g, (_, math) => renderMath(math, false));
