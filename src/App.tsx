@@ -901,10 +901,12 @@ export default function App() {
           /* QAボックス（エディタ・カード表示）自体のフォントをUDデジタル教科書体に指定 */
           .rich-text-content {
             font-family: "UD デジタル 教科書体 N-R", "UD デジタル 教科書体 NP-R", "UD Digital Kyokasho-tai", "UD Digital Kyokasho-tai N-R", sans-serif !important;
+            line-height: 2.0; /* ★ 追加: 数式（分数やルート）が上下のテキストと被らないように行間を広めに確保する */
           }
 
-          /* QAボックス内部の要素（spanなど）にも文字サイズとフォント設定を強制適用 */
-          .rich-text-content * {
+          /* QAボックス内部の要素（spanなど）にも文字サイズとフォント設定を強制適用するが、
+             ★修正: 繊細なサイズ計算が必要な「KaTeXの数式要素 (.katex とその中身)」は除外して保護する */
+          .rich-text-content *:not(.katex):not(.katex *) {
             font-size: inherit !important;
             font-family: inherit !important;
           }
