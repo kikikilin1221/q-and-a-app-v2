@@ -53,6 +53,19 @@ const loadIpaDict = async () => {
   }
   return globalIpaDict;
 };
+
+// ★ 追加：正確な音節（シラブル）をIndexedDBに永久記憶・読み出しする機能
+let globalSyllableDict: Record<string, string> | null = null;
+const loadSyllableDict = async () => {
+  if (globalSyllableDict) return globalSyllableDict;
+  globalSyllableDict = await idb.get('kiokushiyo_syllables') || {};
+  return globalSyllableDict as Record<string, string>; // ★追加: 絶対にnullじゃないことを明示
+};
+const saveSyllable = async (word: string, syllable: string) => {
+  if (!globalSyllableDict) globalSyllableDict = {};
+  globalSyllableDict[word] = syllable;
+  await idb.set('kiokushiyo_syllables', globalSyllableDict);
+};
 // ★ ここまで
 
 import { createClient, type Session } from '@supabase/supabase-js'
@@ -1489,45 +1502,28 @@ export default function App() {
                     let qHTML = questionRef.current?.innerHTML || ''; 
                     const aHTML = answerRef.current?.innerHTML || '';
 
-                    // ★ 英単語モードの自動フォーマット処理（完全ローカル＆熟語対応版）
+                    // ★ 英単語モードの自動フォーマット処理（IPA完全ローカル ＋ 音節は本物辞書の自動キャッシュ）
                     if (isEnglishMode && engWord.trim()) {
                       let inputWord = engWord.trim();
                       let phonetic = engPhonetic.trim();
-                      
-                      // 1. 音節分割 (Hypherを使って元の記号やスペースを維持したまま分割)
-                      let formattedWord = inputWord.replace(/[a-zA-Z]+/g, (match) => {
-                        let lower = match.toLowerCase();
-                        if (localWordDict[lower]?.f) return localWordDict[lower].f;
-                        if (match.length > 3 && !inputWord.includes('-')) {
-                           let hyph = h.hyphenate(match).join('-');
-                           return hyph.replace(/([bcdfghjklmnpqrstvwxyz])-?ity\b/gi, "$1-i-ty");
-                        }
-                        return match;
-                      });
 
-                      // 2. 発音記号の取得 (熟語をスペースで分割して全単語を取得)
+                      // 1. 発音記号(IPA)の取得（13万語ローカルJSONから爆速取得）
                       if (!phonetic) {
                         const dict = await loadIpaDict();
                         const words = inputWord.split(/\s+/);
                         const pArray = [];
-                        
                         for (let w of words) {
                           let cleanWord = w.replace(/[^a-zA-Z'-]/g, '').toLowerCase();
                           if (!cleanWord) continue;
-                          
                           const getIPA = (target: string) => {
                             if (localWordDict[target]?.p) return localWordDict[target].p;
                             if (dict && dict[target]) {
-                               // 辞書のデータがスラッシュを含んでいない場合は付与する
                                let ipa = dict[target];
                                return ipa.startsWith('/') ? ipa : `/${ipa}/`;
                             }
                             return '';
                           };
-
                           let p = getIPA(cleanWord);
-
-                          // 見つからなければ原形（ルート）で再検索
                           if (!p) {
                             let rootWord = cleanWord;
                             if (cleanWord.endsWith('ies')) rootWord = cleanWord.slice(0, -3) + 'y';
@@ -1535,16 +1531,68 @@ export default function App() {
                             else if (cleanWord.endsWith('s') && !cleanWord.endsWith('ss')) rootWord = cleanWord.slice(0, -1);
                             else if (cleanWord.endsWith('ing')) rootWord = cleanWord.slice(0, -3);
                             else if (cleanWord.endsWith('ed')) rootWord = cleanWord.slice(0, -2);
-                            
                             if (rootWord !== cleanWord) p = getIPA(rootWord);
                           }
-                          
                           if (p) pArray.push(p);
                         }
-                        // 取得した発音記号をスペースで結合
                         phonetic = pArray.join(' ');
                       }
-                      
+
+                      // 2. 音節(シラブル)の取得関数（Wiktionaryから取得してIndexedDBに永久保存）
+                      const sylDict = await loadSyllableDict();
+                      const getSyllable = async (target: string) => {
+                        if (localWordDict[target]?.f) return localWordDict[target].f;
+                        if (sylDict[target]) return sylDict[target]; // キャッシュにあれば即答
+
+                        // キャッシュにない場合はWiktionary（本物の辞書）へ取得しに行く
+                        try {
+                          const res = await fetch(`https://en.wiktionary.org/api/rest_v1/page/html/${target}`);
+                          if (res.ok) {
+                            const html = await res.text();
+                            const hyphMatch = html.match(/Hyphenation:.*?<span[^>]*>((?:[^<]+|<!--.*?-->)+)<\/span>/is);
+                            if (hyphMatch) {
+                              let wiktHyph = hyphMatch[1].replace(/<!--.*?-->/g, '').replace(/<[^>]+>/g, '').trim();
+                              if (wiktHyph.includes('‧')) {
+                                const finalSyl = wiktHyph.replace(/‧/g, '-');
+                                await saveSyllable(target, finalSyl); // ★ 取得できたらIndexedDBに記憶させる
+                                return finalSyl;
+                              }
+                            }
+                          }
+                        } catch {} // ★変更: 使っていない (e) を削除
+
+                        // 最終手段：Hypherアルゴリズム
+                        if (target.length >= 3) {
+                          const parts = h.hyphenate(target);
+                          if (parts && parts.length > 1) {
+                            let res = parts.join('-');
+                            return res.replace(/([bcdfghjklmnpqrstvwxyz])-?ity\b/gi, "$1-i-ty");
+                          }
+                        }
+                        return target;
+                      };
+
+                      // 3. 入力された文字列の記号や大文字小文字を維持したまま、単語部分だけを音節化
+                      let formattedWord = '';
+                      if (inputWord.includes('-')) {
+                        // 既に手動でハイフンが入っている場合はそのまま
+                        formattedWord = inputWord;
+                      } else {
+                        const tokens = inputWord.split(/([a-zA-Z]+)/);
+                        for (let i = 0; i < tokens.length; i++) {
+                          if (/[a-zA-Z]+/.test(tokens[i])) {
+                            const lower = tokens[i].toLowerCase();
+                            let syl = await getSyllable(lower);
+                            // 先頭が大文字なら大文字に戻す
+                            if (tokens[i][0] === tokens[i][0].toUpperCase()) {
+                              syl = syl.charAt(0).toUpperCase() + syl.slice(1);
+                            }
+                            tokens[i] = syl;
+                          }
+                        }
+                        formattedWord = tokens.join('');
+                      }
+
                       const engHeader = `<div style="margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px dashed #cbd5e0; display: flex; align-items: baseline; gap: 15px;"><strong style="font-size: 1.4em; color: #2b6cb0; letter-spacing: 1px;">${formattedWord}</strong><span style="font-family: sans-serif; color: #718096; font-size: 1.1em;">${phonetic}</span></div>`;
                       qHTML = engHeader + qHTML;
                       
