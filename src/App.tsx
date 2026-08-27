@@ -275,7 +275,8 @@ function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onEdit, o
       {isEditMode && !isCardExpanded && (
         <div {...attributes} {...listeners} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', borderBottom: '1px solid #eee', paddingBottom: '8px', cursor: 'grab' }}>
           <span style={{ fontSize: '0.85rem', color: '#666', fontWeight: 'bold' }}>⠿ ここをドラッグして並び替え</span>
-          <button onClick={() => { if (window.confirm('本当にこのカードを削除しますか？')) onDelete(card.id); }} style={{ color: '#e53e3e', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold' }}>削除</button>
+          {/* ★ 変更：並び替え中は確認ダイアログなしで即削除する */}
+          <button onClick={() => { onDelete(card.id); }} style={{ color: '#e53e3e', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold' }}>削除</button>
         </div>
       )}
 
@@ -289,7 +290,8 @@ function SortableCard({ card, index, isTestMode, isEditMode, onDelete, onEdit, o
             <div style={{ display: 'flex', gap: '8px' }}>
               <button onClick={() => onCopy(card.question, card.answer)} style={{ ...miniBtnStyle, backgroundColor: '#edf2f7', color: '#4a5568' }}>コピー</button>
               <button onClick={() => onEdit(card)} style={{ ...miniBtnStyle, backgroundColor: '#bee3f8', color: '#2b6cb0' }}>編集する</button>
-              <button onClick={() => { if (window.confirm('本当にこのカードを削除しますか？')) onDelete(card.id); }} style={{ ...miniBtnStyle, backgroundColor: '#fed7d7', color: '#c53030', padding: '4px 10px' }}>✕</button>
+              {/* ★ 変更：isEditMode(並び替え中)の場合は確認ダイアログをスキップする */}
+              <button onClick={() => { if (isEditMode || window.confirm('本当にこのカードを削除しますか？')) onDelete(card.id); }} style={{ ...miniBtnStyle, backgroundColor: '#fed7d7', color: '#c53030', padding: '4px 10px' }}>✕</button>
             </div>
           )}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', color: '#2d3748' }}>
@@ -1544,7 +1546,24 @@ export default function App() {
                         if (localWordDict[target]?.f) return localWordDict[target].f;
                         if (sylDict[target]) return sylDict[target]; // キャッシュにあれば即答
 
-                        // キャッシュにない場合はWiktionary（本物の辞書）へ取得しに行く
+                        // ★ 改善: Datamuse APIを最優先に（音声学的に最も正確なシラブルを取得）
+                        try {
+                          const res = await fetch(`https://api.datamuse.com/words?sp=${target}&md=s&max=1`);
+                          if (res.ok) {
+                            const data = await res.json();
+                            if (data[0]?.tags) {
+                              // "s:ab/do/men" のようなタグを探す
+                              const sylTag = data[0].tags.find((t:string) => t.startsWith('s:'));
+                              if (sylTag) {
+                                const finalSyl = sylTag.replace('s:', '').replace(/\//g, '-');
+                                await saveSyllable(target, finalSyl);
+                                return finalSyl;
+                              }
+                            }
+                          }
+                        } catch {}
+
+                        // バックアップ1：Wiktionary（本物の辞書）
                         try {
                           const res = await fetch(`https://en.wiktionary.org/api/rest_v1/page/html/${target}`);
                           if (res.ok) {
@@ -1559,9 +1578,9 @@ export default function App() {
                               }
                             }
                           }
-                        } catch {} // ★変更: 使っていない (e) を削除
+                        } catch {}
 
-                        // 最終手段：Hypherアルゴリズム
+                        // 最終手段：Hypherアルゴリズム (印刷用ルール)
                         if (target.length >= 3) {
                           const parts = h.hyphenate(target);
                           if (parts && parts.length > 1) {
