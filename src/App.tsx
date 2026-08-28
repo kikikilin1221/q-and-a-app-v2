@@ -411,6 +411,7 @@ export default function App() {
   
   const [isEnglishMode, setIsEnglishMode] = useState(false)
   const [engWord, setEngWord] = useState('')
+  const [engSyllable, setEngSyllable] = useState('') // ★ 追加: 手動シラブル用
   const [engPhonetic, setEngPhonetic] = useState('')
   const [engSuggestions, setEngSuggestions] = useState<string[]>([]) 
 
@@ -1477,17 +1478,23 @@ export default function App() {
                       </div>
                       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '10px', position: 'relative', overflow: 'auto' }}>
                         {isEnglishMode && (
-                          <div style={{ display: 'flex', gap: '10px', paddingBottom: '10px', marginBottom: '10px', borderBottom: '2px dashed #cbd5e0', flexShrink: 0, alignItems: 'center' }}>
-                            {/* ★ 追加: inputMode="email" でIMEを自動的にオフ(英語)にする */}
-                            <input id="engWordInput" type="text" inputMode="email" lang="en" placeholder="英単語を入力..." value={engWord} onChange={(e) => { setEngWord(e.target.value); const rect = e.target.getBoundingClientRect(); setSuggestionPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX }); setSuggestionTarget('engWord'); }} onKeyDown={handleEngWordKeyDown} onFocus={(e) => { lastRangeRef.current = null; if (e.target.value.length >= 2) { const rect = e.target.getBoundingClientRect(); setSuggestionPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX }); setSuggestionTarget('engWord'); } }} onBlur={() => setTimeout(() => setSuggestionTarget(null), 200)} style={{ flex: 1, padding: '6px', borderRadius: '4px', border: '1px solid #a0aec0', fontSize: '1rem', outline: 'none' }} />
-                            <input type="text" placeholder="発音記号 (自動)" value={engPhonetic} onChange={(e) => setEngPhonetic(e.target.value)} onFocus={() => { lastRangeRef.current = null; }} style={{ width: '120px', padding: '6px', borderRadius: '4px', border: '1px solid #a0aec0', backgroundColor: '#f7fafc', fontSize: '0.9rem', outline: 'none' }} />
-                            {/* ★ 追加: 入力中の英単語を即座にコピーできるボタン */}
-                            <button onClick={() => { if(engWord) navigator.clipboard.writeText(engWord); }} style={{ ...miniBtnStyle, backgroundColor: '#ebf8ff', color: '#2b6cb0', padding: '6px 10px', flexShrink: 0 }} title="英単語をコピー">📋 コピー</button>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingBottom: '10px', marginBottom: '10px', borderBottom: '2px dashed #cbd5e0', flexShrink: 0 }}>
+                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                              {/* ★ 変更: inputMode="url" がスマホ等で最も強力に英語キーボードを強制します */}
+                              <input id="engWordInput" type="text" inputMode="url" lang="en" spellCheck="false" placeholder="英単語を入力..." value={engWord} onChange={(e) => { setEngWord(e.target.value); setEngSyllable(e.target.value); const rect = e.target.getBoundingClientRect(); setSuggestionPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX }); setSuggestionTarget('engWord'); }} onKeyDown={handleEngWordKeyDown} onFocus={(e) => { lastRangeRef.current = null; if (e.target.value.length >= 2) { const rect = e.target.getBoundingClientRect(); setSuggestionPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX }); setSuggestionTarget('engWord'); } }} onBlur={() => setTimeout(() => setSuggestionTarget(null), 200)} style={{ flex: 1, padding: '6px', borderRadius: '4px', border: '1px solid #a0aec0', fontSize: '1rem', outline: 'none' }} />
+                              <input type="text" inputMode="url" lang="en" spellCheck="false" placeholder="発音記号 (自動)" value={engPhonetic} onChange={(e) => setEngPhonetic(e.target.value)} onFocus={() => { lastRangeRef.current = null; }} style={{ width: '120px', padding: '6px', borderRadius: '4px', border: '1px solid #a0aec0', backgroundColor: '#f7fafc', fontSize: '0.9rem', outline: 'none' }} />
+                              <button onClick={() => { if(engWord) navigator.clipboard.writeText(engWord); }} style={{ ...miniBtnStyle, backgroundColor: '#ebf8ff', color: '#2b6cb0', padding: '6px 10px', flexShrink: 0 }} title="英単語をコピー">📋 コピー</button>
+                            </div>
+                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                              {/* ★ 追加: 手動でスペースを入れるための音節ボックス */}
+                              <input type="text" inputMode="url" lang="en" spellCheck="false" placeholder="音節を手動で分割 (例: ab do men)" value={engSyllable} onChange={(e) => setEngSyllable(e.target.value)} style={{ flex: 1, padding: '6px', borderRadius: '4px', border: '1px solid #a0aec0', backgroundColor: '#fffaf0', fontSize: '1rem', outline: 'none' }} title="スペースで区切ると通信をスキップして爆速で追加されます" />
+                              <span style={{ fontSize: '0.75rem', color: '#718096', whiteSpace: 'nowrap' }}>スペース区切りで爆速追加⚡️</span>
+                            </div>
                           </div>
                         )}
                         {renderNewImages(qImages, true)}
-                        {/* ★ 追加: isEnglishModeの時のみ inputMode を email にしてIMEを自動オフにする */}
-                        <div ref={questionRef} contentEditable inputMode={isEnglishMode ? "email" : "text"} lang={isEnglishMode ? "en" : "ja"} onInput={handleBoxInput} onKeyDown={handleBoxKeyDown} onBlur={() => setTimeout(() => setSuggestionTarget(null), 200)} onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, true)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre', color: '#000000', minWidth: 'max-content' }} />
+                        {/* ★ 変更: inputMode="url" と spellCheck="false" で英語入力を徹底 */}
+                        <div ref={questionRef} contentEditable inputMode={isEnglishMode ? "url" : "text"} lang={isEnglishMode ? "en" : "ja"} spellCheck="false" onInput={handleBoxInput} onKeyDown={handleBoxKeyDown} onBlur={() => setTimeout(() => setSuggestionTarget(null), 200)} onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, true)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre', color: '#000000', minWidth: 'max-content' }} />
                       </div>
                     </div>
                     
@@ -1518,10 +1525,11 @@ export default function App() {
                     let qHTML = questionRef.current?.innerHTML || ''; 
                     const aHTML = answerRef.current?.innerHTML || '';
 
-                    // ★ 英単語モードの自動フォーマット処理（IPA完全ローカル ＋ 音節は本物辞書の自動キャッシュ）
+                    // ★ 英単語モードの自動フォーマット処理（IPA完全ローカル ＋ 手動スペースで爆速化）
                     if (isEnglishMode && engWord.trim()) {
                       let inputWord = engWord.trim();
                       let phonetic = engPhonetic.trim();
+                      let manualSyllable = engSyllable.trim();
 
                       // 1. 発音記号(IPA)の取得（13万語ローカルJSONから爆速取得）
                       if (!phonetic) {
@@ -1554,82 +1562,87 @@ export default function App() {
                         phonetic = pArray.join(' ');
                       }
 
-                      // 2. 音節(シラブル)の取得関数（Wiktionaryから取得してIndexedDBに永久保存）
-                      const sylDict = await loadSyllableDict();
-                      const getSyllable = async (target: string) => {
-                        if (localWordDict[target]?.f) return localWordDict[target].f;
-                        if (sylDict[target]) return sylDict[target]; // キャッシュにあれば即答
-
-                        // ★ 改善: Datamuse APIを最優先に（音声学的に最も正確なシラブルを取得）
-                        try {
-                          const res = await fetch(`https://api.datamuse.com/words?sp=${target}&md=s&max=1`);
-                          if (res.ok) {
-                            const data = await res.json();
-                            if (data[0]?.tags) {
-                              // "s:ab/do/men" のようなタグを探す
-                              const sylTag = data[0].tags.find((t:string) => t.startsWith('s:'));
-                              if (sylTag) {
-                                const finalSyl = sylTag.replace('s:', '').replace(/\//g, '-');
-                                await saveSyllable(target, finalSyl);
-                                return finalSyl;
-                              }
-                            }
-                          }
-                        } catch {}
-
-                        // バックアップ1：Wiktionary（本物の辞書）
-                        try {
-                          const res = await fetch(`https://en.wiktionary.org/api/rest_v1/page/html/${target}`);
-                          if (res.ok) {
-                            const html = await res.text();
-                            const hyphMatch = html.match(/Hyphenation:.*?<span[^>]*>((?:[^<]+|<!--.*?-->)+)<\/span>/is);
-                            if (hyphMatch) {
-                              let wiktHyph = hyphMatch[1].replace(/<!--.*?-->/g, '').replace(/<[^>]+>/g, '').trim();
-                              if (wiktHyph.includes('‧')) {
-                                const finalSyl = wiktHyph.replace(/‧/g, '-');
-                                await saveSyllable(target, finalSyl); // ★ 取得できたらIndexedDBに記憶させる
-                                return finalSyl;
-                              }
-                            }
-                          }
-                        } catch {}
-
-                        // 最終手段：Hypherアルゴリズム (印刷用ルール)
-                        if (target.length >= 3) {
-                          const parts = h.hyphenate(target);
-                          if (parts && parts.length > 1) {
-                            let res = parts.join('-');
-                            return res.replace(/([bcdfghjklmnpqrstvwxyz])-?ity\b/gi, "$1-i-ty");
-                          }
-                        }
-                        return target;
-                      };
-
-                      // 3. 入力された文字列の記号や大文字小文字を維持したまま、単語部分だけを音節化
+                      // 2. 音節(シラブル)の処理
                       let formattedWord = '';
-                      if (inputWord.includes('-')) {
-                        // 既に手動でハイフンが入っている場合はそのまま
-                        formattedWord = inputWord;
-                      } else {
-                        const tokens = inputWord.split(/([a-zA-Z]+)/);
-                        for (let i = 0; i < tokens.length; i++) {
-                          if (/[a-zA-Z]+/.test(tokens[i])) {
-                            const lower = tokens[i].toLowerCase();
-                            let syl = await getSyllable(lower);
-                            // 先頭が大文字なら大文字に戻す
-                            if (tokens[i][0] === tokens[i][0].toUpperCase()) {
-                              syl = syl.charAt(0).toUpperCase() + syl.slice(1);
-                            }
-                            tokens[i] = syl;
-                          }
+                      
+                      // ★ 追加: 手動でスペースが入力されている場合、API通信を完全にスキップして爆速処理する
+                      if (manualSyllable.includes(' ')) {
+                        formattedWord = manualSyllable.replace(/\s+/g, '-');
+                        // 次回以降のためにこの分割をIndexedDBに記憶させておく
+                        if (!inputWord.includes(' ')) {
+                          await saveSyllable(inputWord.toLowerCase(), formattedWord);
                         }
-                        formattedWord = tokens.join('');
+                      } else {
+                        // スペース入力がない場合のみ、従来の時間のかかるAPIやアルゴリズムを実行
+                        const sylDict = await loadSyllableDict();
+                        const getSyllable = async (target: string) => {
+                          if (localWordDict[target]?.f) return localWordDict[target].f;
+                          if (sylDict[target]) return sylDict[target];
+
+                          try {
+                            const res = await fetch(`https://api.datamuse.com/words?sp=${target}&md=s&max=1`);
+                            if (res.ok) {
+                              const data = await res.json();
+                              if (data[0]?.tags) {
+                                const sylTag = data[0].tags.find((t:string) => t.startsWith('s:'));
+                                if (sylTag) {
+                                  const finalSyl = sylTag.replace('s:', '').replace(/\//g, '-');
+                                  await saveSyllable(target, finalSyl);
+                                  return finalSyl;
+                                }
+                              }
+                            }
+                          } catch {}
+
+                          try {
+                            const res = await fetch(`https://en.wiktionary.org/api/rest_v1/page/html/${target}`);
+                            if (res.ok) {
+                              const html = await res.text();
+                              const hyphMatch = html.match(/Hyphenation:.*?<span[^>]*>((?:[^<]+|<!--.*?-->)+)<\/span>/is);
+                              if (hyphMatch) {
+                                let wiktHyph = hyphMatch[1].replace(/<!--.*?-->/g, '').replace(/<[^>]+>/g, '').trim();
+                                if (wiktHyph.includes('‧')) {
+                                  const finalSyl = wiktHyph.replace(/‧/g, '-');
+                                  await saveSyllable(target, finalSyl);
+                                  return finalSyl;
+                                }
+                              }
+                            }
+                          } catch {}
+
+                          if (target.length >= 3) {
+                            const parts = h.hyphenate(target);
+                            if (parts && parts.length > 1) {
+                              let res = parts.join('-');
+                              return res.replace(/([bcdfghjklmnpqrstvwxyz])-?ity\b/gi, "$1-i-ty");
+                            }
+                          }
+                          return target;
+                        };
+
+                        if (inputWord.includes('-')) {
+                          formattedWord = inputWord;
+                        } else {
+                          const tokens = inputWord.split(/([a-zA-Z]+)/);
+                          for (let i = 0; i < tokens.length; i++) {
+                            if (/[a-zA-Z]+/.test(tokens[i])) {
+                              const lower = tokens[i].toLowerCase();
+                              let syl = await getSyllable(lower);
+                              if (tokens[i][0] === tokens[i][0].toUpperCase()) {
+                                syl = syl.charAt(0).toUpperCase() + syl.slice(1);
+                              }
+                              tokens[i] = syl;
+                            }
+                          }
+                          formattedWord = tokens.join('');
+                        }
                       }
 
                       const engHeader = `<div style="margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px dashed #cbd5e0; display: flex; align-items: baseline; gap: 15px;"><strong style="font-size: 1.4em; color: #2b6cb0; letter-spacing: 1px;">${formattedWord}</strong><span style="font-family: sans-serif; color: #718096; font-size: 1.1em;">${phonetic}</span></div>`;
                       qHTML = engHeader + qHTML;
                       
                       setEngWord('');
+                      setEngSyllable(''); // ★ 追加: 追加後にリセット
                       setEngPhonetic('');
                     }
 
