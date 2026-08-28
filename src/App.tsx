@@ -715,6 +715,15 @@ export default function App() {
     }
   }, [isExpanded, fontSize])
 
+  // ★ 追加: 英単語モードがオンになった時、Qボックスが空ならデフォルトで「品詞」タグを挿入する
+  useEffect(() => {
+    if (isEnglishMode && questionRef.current && questionRef.current.innerHTML.trim() === '') {
+      questionRef.current.innerHTML = '&#8203;<span style="background-color: #e2e8f0; color: #4a5568; padding: 1px 4px; border-radius: 4px; margin: 0 2px;" contenteditable="false">品詞</span>&#8203;';
+    } else if (!isEnglishMode && questionRef.current && questionRef.current.innerHTML.includes('品詞</span>') && questionRef.current.textContent?.trim() === '品詞') {
+      questionRef.current.innerHTML = ''; // モードをオフにした時に空なら消す
+    }
+  }, [isEnglishMode]);
+
  // ★ クリック時とキーボード入力時のみ静かにカーソル位置を記憶（再描画なし）
   const saveCursorPosition = () => {
     const sel = window.getSelection();
@@ -1468,13 +1477,17 @@ export default function App() {
                       </div>
                       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '10px', position: 'relative', overflow: 'auto' }}>
                         {isEnglishMode && (
-                          <div style={{ display: 'flex', gap: '10px', paddingBottom: '10px', marginBottom: '10px', borderBottom: '2px dashed #cbd5e0', flexShrink: 0 }}>
-                            <input id="engWordInput" type="text" placeholder="英単語を入力..." value={engWord} onChange={(e) => { setEngWord(e.target.value); const rect = e.target.getBoundingClientRect(); setSuggestionPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX }); setSuggestionTarget('engWord'); }} onKeyDown={handleEngWordKeyDown} onFocus={(e) => { lastRangeRef.current = null; if (e.target.value.length >= 2) { const rect = e.target.getBoundingClientRect(); setSuggestionPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX }); setSuggestionTarget('engWord'); } }} onBlur={() => setTimeout(() => setSuggestionTarget(null), 200)} style={{ flex: 1, padding: '6px', borderRadius: '4px', border: '1px solid #a0aec0', fontSize: '1rem', outline: 'none' }} />
+                          <div style={{ display: 'flex', gap: '10px', paddingBottom: '10px', marginBottom: '10px', borderBottom: '2px dashed #cbd5e0', flexShrink: 0, alignItems: 'center' }}>
+                            {/* ★ 追加: inputMode="email" でIMEを自動的にオフ(英語)にする */}
+                            <input id="engWordInput" type="text" inputMode="email" lang="en" placeholder="英単語を入力..." value={engWord} onChange={(e) => { setEngWord(e.target.value); const rect = e.target.getBoundingClientRect(); setSuggestionPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX }); setSuggestionTarget('engWord'); }} onKeyDown={handleEngWordKeyDown} onFocus={(e) => { lastRangeRef.current = null; if (e.target.value.length >= 2) { const rect = e.target.getBoundingClientRect(); setSuggestionPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX }); setSuggestionTarget('engWord'); } }} onBlur={() => setTimeout(() => setSuggestionTarget(null), 200)} style={{ flex: 1, padding: '6px', borderRadius: '4px', border: '1px solid #a0aec0', fontSize: '1rem', outline: 'none' }} />
                             <input type="text" placeholder="発音記号 (自動)" value={engPhonetic} onChange={(e) => setEngPhonetic(e.target.value)} onFocus={() => { lastRangeRef.current = null; }} style={{ width: '120px', padding: '6px', borderRadius: '4px', border: '1px solid #a0aec0', backgroundColor: '#f7fafc', fontSize: '0.9rem', outline: 'none' }} />
+                            {/* ★ 追加: 入力中の英単語を即座にコピーできるボタン */}
+                            <button onClick={() => { if(engWord) navigator.clipboard.writeText(engWord); }} style={{ ...miniBtnStyle, backgroundColor: '#ebf8ff', color: '#2b6cb0', padding: '6px 10px', flexShrink: 0 }} title="英単語をコピー">📋 コピー</button>
                           </div>
                         )}
                         {renderNewImages(qImages, true)}
-                        <div ref={questionRef} contentEditable onInput={handleBoxInput} onKeyDown={handleBoxKeyDown} onBlur={() => setTimeout(() => setSuggestionTarget(null), 200)} onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, true)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre', color: '#000000', minWidth: 'max-content' }} />
+                        {/* ★ 追加: isEnglishModeの時のみ inputMode を email にしてIMEを自動オフにする */}
+                        <div ref={questionRef} contentEditable inputMode={isEnglishMode ? "email" : "text"} lang={isEnglishMode ? "en" : "ja"} onInput={handleBoxInput} onKeyDown={handleBoxKeyDown} onBlur={() => setTimeout(() => setSuggestionTarget(null), 200)} onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, true)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre', color: '#000000', minWidth: 'max-content' }} />
                       </div>
                     </div>
                     
@@ -1495,7 +1508,8 @@ export default function App() {
                       </div>
                       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '10px', position: 'relative', overflow: 'auto' }}>
                         {renderNewImages(aImages, false)}
-                        <div ref={answerRef} contentEditable onInput={handleBoxInput} onKeyDown={handleBoxKeyDown} onBlur={() => setTimeout(() => setSuggestionTarget(null), 200)} onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, false)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre', color: '#000000', minWidth: 'max-content' }} />
+                        {/* ★ 追加: inputMode="text" lang="ja" で日本語入力に戻るようOSに指示する */}
+                        <div ref={answerRef} contentEditable inputMode="text" lang="ja" onInput={handleBoxInput} onKeyDown={handleBoxKeyDown} onBlur={() => setTimeout(() => setSuggestionTarget(null), 200)} onKeyUp={saveCursorPosition} onMouseUp={saveCursorPosition} className="rich-text-content" onDrop={(e) => handleDropFromStock(e, false)} onDragOver={(e) => e.preventDefault()} style={{ flex: 1, outline: 'none', fontSize: `${tempCreateFontSize}px`, textAlign: 'left', whiteSpace: 'pre', color: '#000000', minWidth: 'max-content' }} />
                       </div>
                     </div>
                   </div>
@@ -1627,7 +1641,13 @@ export default function App() {
                       const newCard: Card = { id: Date.now().toString(), question: qHTML, answer: aHTML, qImages: [...qImages], aImages: [...aImages], fontSize }; 
                       updateActiveFile(i => ({ ...i, cards: [...i.cards, newCard] })); 
                     }
-                    if (questionRef.current) questionRef.current.innerHTML = ''; if (answerRef.current) answerRef.current.innerHTML = ''; setQImages([]); setAImages([])
+                    
+                    // ★ 変更: カード追加/更新後、英単語モードなら再びデフォルトの「品詞」タグをセットする
+                    if (questionRef.current) {
+                      questionRef.current.innerHTML = isEnglishMode ? '&#8203;<span style="background-color: #e2e8f0; color: #4a5568; padding: 1px 4px; border-radius: 4px; margin: 0 2px;" contenteditable="false">品詞</span>&#8203;' : '';
+                    }
+                    if (answerRef.current) answerRef.current.innerHTML = ''; 
+                    setQImages([]); setAImages([]);
                   }} style={{ ...btnStyle, backgroundColor: editingCardId ? '#d69e2e' : '#3182ce', color: 'white', width: '100%', padding: '10px', marginTop: '15px' }}>{editingCardId ? '更新する' : 'カードを追加'}</button>
                 </div>
               )}
